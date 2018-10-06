@@ -3,60 +3,74 @@
 # https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
 # https://github.com/mjackson/citrus/blob/master/lib/citrus.rb
 
+# Per http://bford.info/pub/lang/peg.pdf:
+# Definition:
+# A parsing expression grammar (PEG) is a 4-tuple G = (VN, VT, R, eS),
+# where VN is a finite set of nonterminal symbols, 
+# VT is a finite set of terminal symbols, 
+# R is a finite set of rules, 
+# eS is a parsing expression termed the start expression, and 
+# VN intersection VT = empty set.
+# Each rule r ∈ R is a pair (A,e), which we write A <- e, where
+# A ∈ VN and e is a parsing expression. For any nonterminal A, there
+# is exactly one e such that (A <- e) ∈ R. R is therefore a function
+# from nonterminals to expressions, and we write R(A) to denote the
+# unique expression e such that (A <- e) ∈ R.
+
 module PegParser
   VERSION = "0.1.0"
 
   module DSL
     ALPHABET = ((' '..'~').map(&.to_s) + ["\n"] + ["\t"])
 
-    def term(string : String) : Rule
+    def term(string : String) : Expr
       Terminal.new(string)
     end
 
-    def choice(alternatives : Array(Rule)) : Rule
+    def choice(alternatives : Array(Expr)) : Expr
       Choice.new(alternatives)
     end
 
-    def apply(rule_name : String) : Rule
+    def apply(rule_name : String) : Expr
       RuleApplication.new(rule_name)
     end
 
-    def range(chars : Range(Char, Char)) : Rule
-      terms = chars.map {|char| term(char.to_s).as(Rule) }
+    def range(chars : Range(Char, Char)) : Expr
+      terms = chars.map {|char| term(char.to_s).as(Expr) }
       choice(terms)
     end
 
-    def dot(alphabet = ALPHABET) : Rule
-      terms = alphabet.map {|char| term(char.to_s).as(Rule) }
+    def dot(alphabet = ALPHABET) : Expr
+      terms = alphabet.map {|char| term(char.to_s).as(Expr) }
       choice(terms)
     end
 
-    def seq(rules : Array(Rule)) : Rule
+    def seq(rules : Array(Expr)) : Expr
       Sequence.new(rules)
     end
     
     # this represents the optional operator `?` - 0 or 1 repetitions
-    def opt(rule : Rule) : Rule
+    def opt(rule : Expr) : Expr
       Optional.new(rule)
     end
 
     # this represents the kleene star operator - 0+ repetitions
-    def star(rule : Rule) : Rule
+    def star(rule : Expr) : Expr
       Repetition.new(rule)
     end
 
     # this represents 1+ repetitions
-    def plus(rule : Rule) : Rule
-      seq([rule, any(rule)] of Rule)
+    def plus(rule : Expr) : Expr
+      seq([rule, star(rule)] of Expr)
     end
 
     # not predicate - negative lookahead
-    def neg(rule : Rule) : Rule
+    def neg(rule : Expr) : Expr
       NegLookAhead.new(rule)
     end
     
     # and predicate - positive lookahead
-    def pos(rule : Rule) : Rule
+    def pos(rule : Expr) : Expr
       PosLookAhead.new(rule)
     end
   end
@@ -75,9 +89,9 @@ module PegParser
     @memoTable : Hash(Int32, Column)
     @input : String
     property pos : Int32
-    getter rules : Hash(String, Rule)
+    getter rules : Hash(String, Expr)
 
-    def initialize(rules = {} of String => Rule)
+    def initialize(rules = {} of String => Expr)
       @rules = rules
 
       @input = ""
@@ -85,7 +99,7 @@ module PegParser
       @pos = 0
     end
 
-    def add_rule(rule_name, rule : Rule)
+    def add_rule(rule_name, rule : Expr)
       @rules[rule_name] = rule
       self
     end
@@ -138,7 +152,7 @@ module PegParser
 
   alias ParseTree = String | Array(ParseTree) | Bool | Nil    # Nil parse tree means parse error
 
-  alias Rule = Terminal | Choice | Sequence | PosLookAhead | NegLookAhead | Optional | Repetition | RuleApplication
+  alias Expr = Terminal | Choice | Sequence | PosLookAhead | NegLookAhead | Optional | Repetition | RuleApplication
 
   # RuleApplication represents the application of a named rule
   class RuleApplication
@@ -178,7 +192,7 @@ module PegParser
 
   # Ordered choice
   class Choice
-    @exps : Array(Rule)
+    @exps : Array(Expr)
 
     def initialize(exps)
       @exps = exps
@@ -196,7 +210,7 @@ module PegParser
   end
 
   class Sequence
-    @exps : Array(Rule)
+    @exps : Array(Expr)
 
     def initialize(exps)
       @exps = exps
@@ -216,7 +230,7 @@ module PegParser
 
   # Non-consuming negative lookahead match of e
   class NegLookAhead
-    @exp : Rule
+    @exp : Expr
 
     def initialize(exp)
       @exp = exp
@@ -241,7 +255,7 @@ module PegParser
 
   # Non-consuming positive lookahead match of e
   class PosLookAhead
-    @exp : Rule
+    @exp : Expr
 
     def initialize(exp)
       @exp = exp
@@ -257,7 +271,7 @@ module PegParser
   end
 
   class Optional
-    @exp : Rule
+    @exp : Expr
 
     def initialize(exp)
       @exp = exp
@@ -281,7 +295,7 @@ module PegParser
 
   # this represents the kleene star operator - 0+ repetitions
   class Repetition
-    @exp : Rule
+    @exp : Expr
 
     def initialize(exp)
       @exp = exp
