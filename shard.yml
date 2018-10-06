@@ -1,0 +1,9 @@
+name: pegparser
+version: 0.1.0
+
+authors:
+  - david.ellis <david.ellis@rackspace.com>
+
+crystal: 0.26.1
+
+license: MIT
