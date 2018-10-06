@@ -22,12 +22,12 @@ module PegParser
     end
 
     def range(chars : Range(Char, Char)) : Rule
-      terms : Array(Rule) = chars.map {|char| term(char.to_s) }
+      terms = chars.map {|char| term(char.to_s).as(Rule) }
       choice(terms)
     end
 
     def dot(alphabet = ALPHABET) : Rule
-      terms : Array(Rule) = alphabet.map {|char| term(char.to_s) }
+      terms = alphabet.map {|char| term(char.to_s).as(Rule) }
       choice(terms)
     end
 
@@ -153,6 +153,7 @@ module PegParser
       if matcher.has_memoized_result(name)
         matcher.use_memoized_result(name)
       else
+        # this logic captures "normal" rule application - no memoization, can't handle left recursion
         origPos = matcher.pos
         parse_tree = matcher.rules[name].eval(matcher)
         matcher.memoize_result(origPos, name, parse_tree)

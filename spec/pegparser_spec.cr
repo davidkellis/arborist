@@ -50,4 +50,34 @@ describe PegParser do
       m1.match("def").should eq [[] of ParseTree, "def"] of ParseTree   # should == [[], "def"]
     end
   end
+
+  describe "dot" do
+    it "matches any character" do
+      r1 = seq([dot, dot, dot] of Rule)   # /.../
+      m1 = Matcher.new.add_rule("start", r1)
+
+      m1.match("abc").should eq ["a", "b", "c"]
+      m1.match("xyz").should eq ["x", "y", "z"]
+    end
+  end
+
+  describe "negative lookahead" do
+    it "allows a subsequent rule to be matched so long as it doesn't match the predicate captured in the negative lookahead rule" do
+      r1 = seq([neg(term("abc")), seq([dot, dot, dot] of Rule)] of Rule)   # &"abc" /.../
+      m1 = Matcher.new.add_rule("start", r1)
+
+      m1.match("abc").should be_nil
+      m1.match("xyz").should eq [["x", "y", "z"]]
+    end
+  end
+
+  describe "positive lookahead" do
+    it "allows a subsequent rule to be matched so long as it also matches the predicate captured in the positive lookahead rule" do
+      r1 = seq([pos(term("abc")), seq([dot, dot, dot] of Rule)] of Rule)   # &"abc" /.../
+      m1 = Matcher.new.add_rule("start", r1)
+
+      m1.match("abc").should eq [["a", "b", "c"]]
+      m1.match("xyz").should be_nil
+    end
+  end
 end
