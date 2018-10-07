@@ -10,7 +10,7 @@ describe PegParser do
 
       m = Matcher.new.add_rule("start", t1)
 
-      m.match("abc").should eq "abc"
+      m.match("abc").try(&.syntax_tree).should eq "abc"
     end
   end
 
@@ -22,8 +22,8 @@ describe PegParser do
 
       m = Matcher.new.add_rule("start", c1)
 
-      m.match("abc").should eq "abc"
-      m.match("def").should eq "def"
+      m.match("abc").try(&.syntax_tree).should eq "abc"
+      m.match("def").try(&.syntax_tree).should eq "def"
     end
 
     it "prioritizes first option over second option in the case that both match" do
@@ -36,8 +36,8 @@ describe PegParser do
       c2 = choice([r2, r1] of Expr)   # "abcdef" | ("abc" "def")
       m2 = Matcher.new.add_rule("start", c2)
 
-      m1.match("abcdef").should eq ["abc", "def"] of ParseTree
-      m2.match("abcdef").should eq "abcdef"
+      m1.match("abcdef").try(&.syntax_tree).should eq ["abc", "def"] of SyntaxTree
+      m2.match("abcdef").try(&.syntax_tree).should eq "abcdef"
     end
   end
 
@@ -46,8 +46,8 @@ describe PegParser do
       r1 = seq([opt(term("abc")), term("def")] of Expr)   # "abc"? "def"
       m1 = Matcher.new.add_rule("start", r1)
 
-      m1.match("abcdef").should eq [["abc"] of ParseTree, "def"] of ParseTree   # should == [["abc"], "def"]
-      m1.match("def").should eq [[] of ParseTree, "def"] of ParseTree   # should == [[], "def"]
+      m1.match("abcdef").try(&.syntax_tree).should eq [["abc"] of SyntaxTree, "def"] of SyntaxTree   # should == [["abc"], "def"]
+      m1.match("def").try(&.syntax_tree).should eq [[] of SyntaxTree, "def"] of SyntaxTree   # should == [[], "def"]
     end
   end
 
@@ -56,8 +56,8 @@ describe PegParser do
       r1 = seq([dot, dot, dot] of Expr)   # /.../
       m1 = Matcher.new.add_rule("start", r1)
 
-      m1.match("abc").should eq ["a", "b", "c"]
-      m1.match("xyz").should eq ["x", "y", "z"]
+      m1.match("abc").try(&.syntax_tree).should eq ["a", "b", "c"]
+      m1.match("xyz").try(&.syntax_tree).should eq ["x", "y", "z"]
     end
   end
 
@@ -66,8 +66,8 @@ describe PegParser do
       r1 = seq([neg(term("abc")), seq([dot, dot, dot] of Expr)] of Expr)   # &"abc" /.../
       m1 = Matcher.new.add_rule("start", r1)
 
-      m1.match("abc").should be_nil
-      m1.match("xyz").should eq [["x", "y", "z"]]
+      m1.match("abc").try(&.syntax_tree).should be_nil
+      m1.match("xyz").try(&.syntax_tree).should eq [["x", "y", "z"]]
     end
   end
 
@@ -76,20 +76,20 @@ describe PegParser do
       r1 = seq([pos(term("abc")), seq([dot, dot, dot] of Expr)] of Expr)   # &"abc" /.../
       m1 = Matcher.new.add_rule("start", r1)
 
-      m1.match("abc").should eq [["a", "b", "c"]]
-      m1.match("xyz").should be_nil
+      m1.match("abc").try(&.syntax_tree).should eq [["a", "b", "c"]]
+      m1.match("xyz").try(&.syntax_tree).should be_nil
     end
   end
 
-  # describe "left-recursion support" do
-  #   it "allows rules that are left-recursion and not right-recursive" do
-  #     expr = seq([apply("expr"), term("-"), apply("num")] of Expr)    # expr -> expr - num
-  #     num = plus(range('0'..'9'))                                     # num -> [0-9]+
-  #     m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
+  describe "left-recursion support" do
+    it "allows rules that are left-recursion and not right-recursive" do
+      expr = seq([apply("expr"), term("-"), apply("num")] of Expr)    # expr -> expr - num
+      num = plus(range('0'..'9'))                                     # num -> [0-9]+
+      m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
-  #     m1.match("1-2-3", "expr").should eq [[["1"], "-", "2"], "-", "3"]   # should parse as (((1)-2)-3)
-  #   end
-  # end
+      m1.match("1-2-3", "expr").try(&.syntax_tree).should eq [[["1"], "-", "2"], "-", "3"]   # should parse as (((1)-2)-3)
+    end
+  end
 
   describe "rule" do
     describe "direct_definite_right_recursive?" do
