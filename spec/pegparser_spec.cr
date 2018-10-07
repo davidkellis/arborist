@@ -81,13 +81,56 @@ describe PegParser do
     end
   end
 
-  describe "left-recursion support" do
-    it "allows rules that are left-recursion and not right-recursive" do
-      expr = seq([apply("expr"), term("-"), apply("num")] of Expr)    # expr -> expr - num
-      num = plus(range('0'..'9'))                                     # num -> [0-9]+
-      m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
+  # describe "left-recursion support" do
+  #   it "allows rules that are left-recursion and not right-recursive" do
+  #     expr = seq([apply("expr"), term("-"), apply("num")] of Expr)    # expr -> expr - num
+  #     num = plus(range('0'..'9'))                                     # num -> [0-9]+
+  #     m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
-      m1.match("1-2-3", "expr").should eq [[["1"], "-", "2"], "-", "3"]   # should parse as (((1)-2)-3)
+  #     m1.match("1-2-3", "expr").should eq [[["1"], "-", "2"], "-", "3"]   # should parse as (((1)-2)-3)
+  #   end
+  # end
+
+  describe "rule" do
+    describe "direct_definite_right_recursive?" do
+      it "returns true when a sequence rule's right most term is definitely right recursive; false otherwise" do
+        r1 = seq([term("foo"), term("bar")] of Expr)
+        r2 = seq([term("foo"), term("bar"), apply("rule2")] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1).add_rule("rule2", r2)
+
+        m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
+        m1.get_rule("rule2").direct_definite_right_recursive?.should be_true
+      end
+
+      it "returns false if a rule is indirectly right recursive (through mutual recursion with another rule)" do
+        r1 = seq([term("foo"), term("bar"), apply("rule2")] of Expr)
+        r2 = seq([term("baz"), term("qux"), apply("rule1")] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1).add_rule("rule2", r2)
+
+        m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
+        m1.get_rule("rule2").direct_definite_right_recursive?.should be_false
+      end
+
+      it "returns false if a rule is optionally right recursive" do
+        r1 = seq([term("foo"), term("bar"), opt(apply("rule1"))] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1)
+
+        m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
+      end
+
+      it "returns false if a rule has a right-most 0+ repetition expression that wraps a recursive rule application" do
+        r1 = seq([term("foo"), term("bar"), star(apply("rule1"))] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1)
+
+        m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
+      end
+
+      it "returns true if a rule has a right-most 1+ repetition expression that wraps a recursive rule application" do
+        r1 = seq([term("foo"), term("bar"), plus(apply("rule1"))] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1)
+
+        m1.get_rule("rule1").direct_definite_right_recursive?.should be_true
+      end
     end
   end
 end

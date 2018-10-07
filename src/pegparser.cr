@@ -45,33 +45,34 @@ module PegParser
       choice(terms)
     end
 
-    def seq(rules : Array(Expr)) : Expr
-      Sequence.new(rules)
+    def seq(exprs : Array(Expr)) : Expr
+      Sequence.new(exprs)
     end
     
     # this represents the optional operator `?` - 0 or 1 repetitions
-    def opt(rule : Expr) : Expr
-      Optional.new(rule)
+    def opt(expr : Expr) : Expr
+      Optional.new(expr)
     end
 
     # this represents the kleene star operator - 0+ repetitions
-    def star(rule : Expr) : Expr
-      Repetition.new(rule)
+    def star(expr : Expr) : Expr
+      Repetition.new(expr)
     end
 
     # this represents 1+ repetitions
-    def plus(rule : Expr) : Expr
-      seq([rule, star(rule)] of Expr)
+    def plus(expr : Expr) : Expr
+      # seq([expr, star(expr)] of Expr)
+      RepetitionOnePlus.new(expr)
     end
 
     # not predicate - negative lookahead
-    def neg(rule : Expr) : Expr
-      NegLookAhead.new(rule)
+    def neg(expr : Expr) : Expr
+      NegLookAhead.new(expr)
     end
     
     # and predicate - positive lookahead
-    def pos(rule : Expr) : Expr
-      PosLookAhead.new(rule)
+    def pos(expr : Expr) : Expr
+      PosLookAhead.new(expr)
     end
   end
 
@@ -85,23 +86,45 @@ module PegParser
 
   alias Column = Hash(String, MemoResult)
 
+  class Rule
+    getter matcher : Matcher
+    property name : String
+    property expr : Expr
+    property direct_definite_right_recursive : Bool?
+
+    def initialize(@matcher, @name, @expr)
+    end
+
+    def direct_definite_right_recursive?
+      @direct_definite_right_recursive ||= @expr.direct_definite_right_recursive?(self, @matcher)
+    end
+  end
+
   class Matcher
     @memoTable : Hash(Int32, Column)
     @input : String
     property pos : Int32
-    getter rules : Hash(String, Expr)
+    getter rules : Hash(String, Rule)
+    property growing : Hash(Rule, Hash(Int32, ParseTree))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
+    property limit : Set(String)    # limit is a set of rule names
 
-    def initialize(rules = {} of String => Expr)
+    def initialize(rules = {} of String => Rule)
       @rules = rules
+      @growing = {} of Rule => Hash(Int32, ParseTree)
+      @limit = Set(String).new
 
       @input = ""
       @memoTable = {} of Int32 => Column
       @pos = 0
     end
 
-    def add_rule(rule_name, rule : Expr)
-      @rules[rule_name] = rule
+    def add_rule(rule_name, expr : Expr)
+      @rules[rule_name] = Rule.new(self, rule_name, expr)
       self
+    end
+
+    def get_rule(rule_name) : Rule
+      @rules[rule_name]
     end
 
     def match(input, start_rule_name = "start")
@@ -112,12 +135,12 @@ module PegParser
       parse_tree if @pos == @input.size
     end
 
-    def has_memoized_result(ruleName)
+    def has_memoized_result(rule_name)
       col = @memoTable[@pos]?
-      col && col.has_key?(ruleName)
+      col && col.has_key?(rule_name)
     end
 
-    def memoize_result(pos, ruleName, parse_tree)
+    def memoize_result(pos, rule_name, parse_tree)
       col = (@memoTable[pos] ||= {} of String => MemoResult)
       # col = @memoTable[pos]?
       # col ||= (@memoTable[pos] = {} of String => MemoResult)
@@ -128,12 +151,12 @@ module PegParser
         # {cst: nil}
         MemoResult.new(nil)
       end
-      col[ruleName] = memoized_result
+      col[rule_name] = memoized_result
     end
 
-    def use_memoized_result(ruleName)
+    def use_memoized_result(rule_name)
       col = @memoTable[@pos]
-      result = col[ruleName]
+      result = col[rule_name]
       if result.parse_tree
         @pos = result.nextPos
         result.parse_tree
@@ -152,27 +175,31 @@ module PegParser
 
   alias ParseTree = String | Array(ParseTree) | Bool | Nil    # Nil parse tree means parse error
 
-  alias Expr = Terminal | Choice | Sequence | PosLookAhead | NegLookAhead | Optional | Repetition | RuleApplication
+  alias Expr = Terminal | Choice | Sequence | PosLookAhead | NegLookAhead | Optional | Repetition | RepetitionOnePlus | RuleApplication
 
   # RuleApplication represents the application of a named rule
   class RuleApplication
-    @ruleName : String
+    @rule_name : String
 
-    def initialize(ruleName)
-      @ruleName = ruleName
+    def initialize(rule_name)
+      @rule_name = rule_name
     end
 
     def eval(matcher)
-      name = @ruleName
+      name = @rule_name
       if matcher.has_memoized_result(name)
         matcher.use_memoized_result(name)
       else
         # this logic captures "normal" rule application - no memoization, can't handle left recursion
         origPos = matcher.pos
-        parse_tree = matcher.rules[name].eval(matcher)
+        parse_tree = matcher.rules[name].expr.eval(matcher)
         matcher.memoize_result(origPos, name, parse_tree)
         parse_tree
       end
+    end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      @rule_name == calling_rule.name   # something like the following will be needed if we ever need to cope with indirect right recursion: || matcher.rules[@rule_name].expr.direct_definite_right_recursive?(calling_rule, matcher)
     end
   end
 
@@ -187,6 +214,10 @@ module PegParser
     # returns String | Nil
     def eval(matcher) : ParseTree
       @str if @str.each_char.all? {|c| matcher.consume(c) }
+    end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      false
     end
   end
 
@@ -207,6 +238,10 @@ module PegParser
       end
       nil
     end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      @exps.any?(&.direct_definite_right_recursive?(calling_rule, matcher))
+    end
   end
 
   class Sequence
@@ -225,6 +260,10 @@ module PegParser
         ans.push(parse_tree) unless expr.is_a?(NegLookAhead) || expr.is_a?(PosLookAhead)
       end
       ans
+    end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      @exps.last?.try(&.direct_definite_right_recursive?(calling_rule, matcher))
     end
   end
 
@@ -251,6 +290,10 @@ module PegParser
       matcher.pos = origPos
       result || nil
     end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      false
+    end
   end
 
   # Non-consuming positive lookahead match of e
@@ -267,6 +310,10 @@ module PegParser
       result = !!@exp.eval(matcher)
       matcher.pos = origPos
       result || nil
+    end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      false
     end
   end
 
@@ -290,6 +337,10 @@ module PegParser
       end
 
       ans
+    end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      false
     end
   end
 
@@ -315,6 +366,47 @@ module PegParser
         end
       end
       ans
+    end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      false
+    end
+  end
+
+  # this represents 1+ repetitions
+  class RepetitionOnePlus
+    @exp : Expr
+
+    def initialize(exp)
+      @exp = exp
+    end
+
+    # returns Array(ParseTree) | Nil
+    def eval(matcher) : ParseTree
+      ans = [] of ParseTree
+      start_pos = matcher.pos
+
+      loop do
+        origPos = matcher.pos
+        parse_tree = @exp.eval(matcher)
+        if parse_tree
+          ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
+        else
+          matcher.pos = origPos
+          break
+        end
+      end
+
+      if ans.size >= 1
+        ans
+      else
+        matcher.pos = start_pos
+        nil
+      end
+    end
+
+    def direct_definite_right_recursive?(calling_rule, matcher)
+      @exp.direct_definite_right_recursive?(calling_rule, matcher)
     end
   end
 end
