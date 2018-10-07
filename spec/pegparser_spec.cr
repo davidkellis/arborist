@@ -96,10 +96,12 @@ describe PegParser do
       it "returns true when a sequence rule's right most term is definitely right recursive; false otherwise" do
         r1 = seq([term("foo"), term("bar")] of Expr)
         r2 = seq([term("foo"), term("bar"), apply("rule2")] of Expr)
-        m1 = Matcher.new.add_rule("rule1", r1).add_rule("rule2", r2)
+        r3 = seq([term("foo"), apply("rule3"), term("bar")] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1).add_rule("rule2", r2).add_rule("rule3", r3)
 
         m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
         m1.get_rule("rule2").direct_definite_right_recursive?.should be_true
+        m1.get_rule("rule3").direct_definite_right_recursive?.should be_false
       end
 
       it "returns false if a rule is indirectly right recursive (through mutual recursion with another rule)" do
@@ -116,6 +118,29 @@ describe PegParser do
         m1 = Matcher.new.add_rule("rule1", r1)
 
         m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
+      end
+
+      it "return false if a rule is merely potentially right recursive" do
+        r1 = seq([term("foo"), apply("rule1"), opt(term("bar"))] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1)
+
+        m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
+      end
+
+      it "a rule is directly and definitely right recursive if the rule is directly recursive, right-recursive, and the right-recursive term is static/fixed/unchanging and unconditional. In other words, the right-recursive term must not be dependent on the input being matched." do
+        # test case 1
+        r1 = seq([term("foo"), apply("rule1"), opt(apply("rule1"))] of Expr)
+        m1 = Matcher.new.add_rule("rule1", r1)
+
+        m1.get_rule("rule1").direct_definite_right_recursive?.should be_false
+
+
+        # test case 2
+        expr = choice([ seq([ apply("expr"), term("-"), apply("expr")] of Expr), apply("num")] of Expr)
+        num = plus(range('0'..'9'))                                     # num -> [0-9]+
+        m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
+
+        m1.get_rule("expr").direct_definite_right_recursive?.should be_true
       end
 
       it "returns false if a rule has a right-most 0+ repetition expression that wraps a recursive rule application" do
