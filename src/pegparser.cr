@@ -403,7 +403,7 @@ module PegParser
       origPos = matcher.pos
       expr_does_not_match = !@exp.eval(matcher, calling_rule, calling_rule_pos)
       matcher.pos = origPos
-      ParseTree.new(expr_does_not_match, -1) || nil
+      ParseTree.new(expr_does_not_match, -1) if expr_does_not_match
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
@@ -424,7 +424,7 @@ module PegParser
       origPos = matcher.pos
       expr_matches = !!@exp.eval(matcher, calling_rule, calling_rule_pos)
       matcher.pos = origPos
-      ParseTree.new(expr_matches, -1) || nil
+      ParseTree.new(expr_matches, -1) if expr_matches
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
