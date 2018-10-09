@@ -156,7 +156,6 @@ describe PegParser do
 
       # m1.match("1", "e").try(&.syntax_tree).should eq "1"
       # m1.match("12", "e").try(&.syntax_tree).should eq ["1", "2"]
-      puts "*" * 80
       m1.match("122", "e").try(&.syntax_tree).should eq [["1", "2"], "2"]
     end
   end
