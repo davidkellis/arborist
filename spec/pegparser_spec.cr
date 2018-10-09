@@ -81,13 +81,83 @@ describe PegParser do
     end
   end
 
+  describe "range" do
+    it "matches any character in the range" do
+      num = range('0'..'9')
+      m1 = Matcher.new.add_rule("num", num)
+      m1.match("1", "num").try(&.syntax_tree).should eq "1"
+    end
+
+    it "doesn't match any character outside of the range" do
+      num = range('0'..'9')
+      m1 = Matcher.new.add_rule("num", num)
+      m1.match("a", "num").try(&.syntax_tree).should be_nil
+    end
+  end
+
+  describe "star" do
+    it "matches 0+ instances of the wrapped" do
+      r1 = star(term("a"))
+      m1 = Matcher.new.add_rule("rule1", r1)
+      m1.match("", "rule1").try(&.syntax_tree).should eq [] of SyntaxTree
+      m1.match("a", "rule1").try(&.syntax_tree).should eq ["a"] of SyntaxTree
+      m1.match("aa", "rule1").try(&.syntax_tree).should eq ["a", "a"] of SyntaxTree
+      m1.match("b", "rule1").try(&.syntax_tree).should be_nil
+    end
+
+    it "works in conjunction with the range expression" do
+      r1 = star(range('0'..'9'))
+      m1 = Matcher.new.add_rule("rule1", r1)
+      m1.match("", "rule1").try(&.syntax_tree).should eq [] of SyntaxTree
+      m1.match("1", "rule1").try(&.syntax_tree).should eq ["1"] of SyntaxTree
+      m1.match("123", "rule1").try(&.syntax_tree).should eq ["1", "2", "3"] of SyntaxTree
+    end
+  end
+
+  describe "plus" do
+    it "matches any character in the range" do
+      r1 = plus(term("a"))
+      m1 = Matcher.new.add_rule("rule1", r1)
+      m1.match("", "rule1").try(&.syntax_tree).should be_nil
+      m1.match("a", "rule1").try(&.syntax_tree).should eq ["a"]
+      m1.match("aa", "rule1").try(&.syntax_tree).should eq ["a", "a"]
+      m1.match("b", "rule1").try(&.syntax_tree).should be_nil
+    end
+
+    it "works in conjunction with the range expression" do
+      r1 = plus(range('0'..'9'))
+      m1 = Matcher.new.add_rule("rule1", r1)
+      m1.match("", "rule1").try(&.syntax_tree).should be_nil
+      m1.match("1", "rule1").try(&.syntax_tree).should eq ["1"] of SyntaxTree
+      m1.match("123", "rule1").try(&.syntax_tree).should eq ["1", "2", "3"] of SyntaxTree
+    end
+  end
+
   describe "left-recursion support" do
-    it "allows rules that are left-recursion and not right-recursive" do
+    it "rejects left recursive rules that would never backtrack to an alternate branch if the left recursive application fails" do
       expr = seq([apply("expr"), term("-"), apply("num")] of Expr)    # expr -> expr - num
       num = plus(range('0'..'9'))                                     # num -> [0-9]+
       m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
-      m1.match("1-2-3", "expr").try(&.syntax_tree).should eq [[["1"], "-", "2"], "-", "3"]   # should parse as (((1)-2)-3)
+      m1.match("1-2-3", "expr").should be_nil
+    end
+
+    it "allows rules that are left-recursion and not right-recursive" do
+      expr = choice([ seq([ apply("expr"), term("-"), apply("num")] of Expr), apply("num")] of Expr)    # expr -> expr - num / num
+      num = plus(range('0'..'9'))                                                                       # num -> [0-9]+
+      m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
+
+      m1.match("1-2-3", "expr").try(&.syntax_tree).should eq [[["1"], "-", ["2"]], "-", ["3"]]   # should parse as (((1)-2)-3)
+    end
+
+    it "matches e -> e '2' | '1'" do
+      e = choice([ seq([ apply("e"), term("2")] of Expr), term("1")] of Expr)    # e -> e "2" | "1"
+      m1 = Matcher.new.add_rule("e", e)
+
+      # m1.match("1", "e").try(&.syntax_tree).should eq "1"
+      # m1.match("12", "e").try(&.syntax_tree).should eq ["1", "2"]
+      puts "*" * 80
+      m1.match("122", "e").try(&.syntax_tree).should eq [["1", "2"], "2"]
     end
   end
 
@@ -136,8 +206,8 @@ describe PegParser do
 
 
         # test case 2
-        expr = choice([ seq([ apply("expr"), term("-"), apply("expr")] of Expr), apply("num")] of Expr)
-        num = plus(range('0'..'9'))                                     # num -> [0-9]+
+        expr = choice([ seq([ apply("expr"), term("-"), apply("expr")] of Expr), apply("num")] of Expr)   # expr -> expr "-" num / num
+        num = plus(range('0'..'9'))                                                                       # num -> [0-9]+
         m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
         m1.get_rule("expr").direct_definite_right_recursive?.should be_true
