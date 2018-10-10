@@ -154,8 +154,8 @@ describe PegParser do
       e = choice([ seq([ apply("e"), term("2")] of Expr), term("1")] of Expr)    # e -> e "2" | "1"
       m1 = Matcher.new.add_rule("e", e)
 
-      # m1.match("1", "e").try(&.syntax_tree).should eq "1"
-      # m1.match("12", "e").try(&.syntax_tree).should eq ["1", "2"]
+      m1.match("1", "e").try(&.syntax_tree).should eq "1"
+      m1.match("12", "e").try(&.syntax_tree).should eq ["1", "2"]
       m1.match("122", "e").try(&.syntax_tree).should eq [["1", "2"], "2"]
     end
   end
