@@ -159,6 +159,21 @@ describe PegParser do
       m1.match("122", "e").try(&.syntax_tree).should eq [["1", "2"], "2"]
     end
 
+    it "allows rules that are right-recursive and not left-recursive" do
+      expr = choice([ seq([ apply("num"), term("-"), apply("expr")] of Expr), apply("num")] of Expr)    # expr -> expr - num / num
+      num = plus(range('0'..'9'))                                                                       # num -> [0-9]+
+      m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
+
+      m1.match("1-2-3", "expr").try(&.syntax_tree).should eq [["1"], "-", [["2"], "-", ["3"]]]   # should parse as (1-(2-(3))
+    end
+
+    it "allows rules that are left-recursive and simultaneously recursive in a second point, but not right-recursive" do
+      e = choice([ seq([ apply("e"), term("-"), apply("e"), term("m")] of Expr), term("5")] of Expr)    # e -> e - e | 5
+      m1 = Matcher.new.add_rule("e", e)
+
+      m1.match("5-5m-5m", "e").try(&.syntax_tree).should eq [["5", "-", "5", "m"], "-", "5", "m"]   # should parse as (((5)-5m)-5m)
+    end
+
     it "allows rules that are left and right recursive" do
       e = choice([ seq([ apply("e"), term("-"), apply("e")] of Expr), term("5")] of Expr)    # e -> e - e | 5
       m1 = Matcher.new.add_rule("e", e)
