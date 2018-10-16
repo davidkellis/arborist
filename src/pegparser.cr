@@ -100,14 +100,52 @@ module PegParser
     end
   end
 
-  class RuleApplication
-    getter rule : Rule
+  # all ExprCall classes must have one method: #pos
+  # alias ExprCall = ApplyCall | TerminalCall | ChoiceCall | SequenceCall | NegLookAheadCall | PosLookAheadCall | OptionalCall | RepetitionCall | RepetitionOnePlusCall
+
+  class ExprCall
+    property expr : Expr
     property pos : Int32
+
+    def initialize(@expr, @pos)
+    end
+
+    def inspect(io)
+      io.print("#{self.class.name}:#{self.object_id} at #{@pos}: #{@expr.class.name} #{@expr.to_s}")
+    end
+  end
+
+  class TerminalCall < ExprCall
+  end
+  class ChoiceCall < ExprCall
+  end
+  class SequenceCall < ExprCall
+  end
+  class NegLookAheadCall < ExprCall
+  end
+  class PosLookAheadCall < ExprCall
+  end
+  class OptionalCall < ExprCall
+  end
+  class RepetitionCall < ExprCall
+  end
+  class RepetitionOnePlusCall < ExprCall
+  end
+
+  class ApplyCall < ExprCall
+    getter rule : Rule
+    # property expr : Expr   # inherited from ExprCall
+    # property pos : Int32   # inherited from ExprCall
     property left_recursive : Bool
     property seed_parse_tree : ParseTree?
 
     def initialize(@rule, @pos, @left_recursive = false)
+      @expr = @rule.expr
       @seed_parse_tree = nil
+    end
+
+    def inspect(io)
+      io.print("#{self.class.name}:#{self.object_id} at #{@pos}: #{@rule.name} -> #{@expr.to_s}")
     end
 
     def left_recursive?
@@ -122,8 +160,8 @@ module PegParser
     getter rules : Hash(String, Rule)
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
     property limit : Set(String)    # limit is a set of rule names
-    property rule_call_stack : Array(RuleApplication)
-    property fail_all_rules_until_this_rule : RuleApplication?
+    property expr_call_stack : Array(ExprCall)
+    property fail_all_rules_until_this_rule : ApplyCall?
 
     def initialize(rules = {} of String => Rule)
       @rules = rules
@@ -131,7 +169,7 @@ module PegParser
       # these structures are necessary for handling left recursion
       @growing = {} of Rule => Hash(Int32, ParseTree?)
       @limit = Set(String).new
-      @rule_call_stack = [] of RuleApplication
+      @expr_call_stack = [] of ExprCall
       @fail_all_rules_until_this_rule = nil
 
       @input = ""
@@ -180,39 +218,53 @@ module PegParser
 
       @limit = Set(String).new
 
-      @rule_call_stack = [] of RuleApplication
+      @expr_call_stack = [] of ExprCall
 
       @fail_all_rules_until_this_rule = nil
     end
 
     # returns the deepest/most-recent application of `rule` at position `pos` in the rule application stack
-    def lookup_rule_application_in_call_stack(rule, pos) : RuleApplication?
-      i = @rule_call_stack.size - 1
+    def lookup_rule_application_in_call_stack(rule, pos) : ApplyCall?
+      i = @expr_call_stack.size - 1
       while i >= 0
-        rule_application_i = @rule_call_stack[i]
-        return rule_application_i if rule_application_i.rule == rule && rule_application_i.pos == pos
+        expr_application_i = @expr_call_stack[i]
         i -= 1
+        next unless expr_application_i.is_a?(ApplyCall)
+        return expr_application_i if expr_application_i.rule == rule && expr_application_i.pos == pos
       end
       nil
     end
 
     # returns the deepest/most-recent left-recursive application of `rule` in the rule application stack
-    def lookup_left_recursive_rule_application(rule) : RuleApplication?
-      i = @rule_call_stack.size - 1
+    def lookup_left_recursive_rule_application(rule) : ApplyCall?
+      i = @expr_call_stack.size - 1
       while i >= 0
-        rule_application_i = @rule_call_stack[i]
-        return rule_application_i if rule_application_i.rule == rule && rule_application_i.left_recursive?
+        expr_application_i = @expr_call_stack[i]
         i -= 1
+        next unless expr_application_i.is_a?(ApplyCall)
+        return expr_application_i if expr_application_i.rule == rule && expr_application_i.left_recursive?
       end
       nil
     end
 
-    def fail_all_rules_back_to(previous_application_of_rule)
+    def fail_all_rules_back_to(previous_application_of_rule : ApplyCall)
       @fail_all_rules_until_this_rule = previous_application_of_rule
     end
 
     def fail_all_rules?
       !!@fail_all_rules_until_this_rule
+    end
+
+    def push_onto_call_stack(expr_application : ExprCall)
+      # puts "push_onto_call_stack #{expr_application.inspect}"
+      @expr_call_stack.push(expr_application)
+      expr_application
+    end
+
+    def pop_off_of_call_stack() : ExprCall
+      retval = @expr_call_stack.pop
+      # puts "pop_off_of_call_stack -> #{retval.inspect}"
+      retval
     end
 
     def has_memoized_result?(rule_name) : Bool
@@ -279,7 +331,7 @@ module PegParser
     end
   end
 
-  alias Expr = Apply | Terminal | Choice | Sequence | NegLookAhead | PosLookAhead | Optional | Repetition | RepetitionOnePlus | StartExpr
+  alias Expr = Apply | Terminal | Choice | Sequence | NegLookAhead | PosLookAhead | Optional | Repetition | RepetitionOnePlus
 
   # Apply represents the application of a named rule
   class Apply
@@ -291,6 +343,11 @@ module PegParser
 
     # this implements Tratt's Algorithm 2 in section 6.4 of https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
     def eval(matcher) : ParseTree?   # line 3 of Algorithm 2
+      # puts "apply rule #{@rule_name} at #{matcher.pos}: #{self.to_s} -> #{matcher.get_rule(@rule_name).expr.to_s}"
+      # puts "call stack (#{matcher.expr_call_stack.size}): #{matcher.expr_call_stack.map(&.inspect).join("\n")}"
+
+      return nil if matcher.fail_all_rules?
+
       rule = matcher.get_rule(@rule_name)
       pos = matcher.pos
 
@@ -313,17 +370,19 @@ module PegParser
 
       is_this_application_right_recursive = false   # is_this_application_recursive && ???
 
+      current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive)
+
       # if false && rule == calling_rule && rule.direct_definite_right_recursive?    # line 4 of Algorithm 2
-      if is_this_application_right_recursive                              # line 4 of Algorithm 2
+      retval = if is_this_application_right_recursive                              # line 4 of Algorithm 2
         # if matcher.limit.includes?(rule.name)                             # line 5 of Algorithm 2
         #   nil                                                             # line 6 of Algorithm 2
         # elsif matcher.growing[rule].has_key?(calling_rule_pos)            # line 7 of Algorithm 2
         #   matcher.limit.add(rule.name)                                    # line 8 of Algorithm 2
-        #   parse_tree = traditional_rule_application(matcher, previous_application_of_rule)              # line 9 of Algorithm 2
+        #   parse_tree = traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)              # line 9 of Algorithm 2
         #   matcher.limit.delete(rule.name)                                 # line 10 of Algorithm 2
         #   parse_tree
         # else                                                              # line 11 of Algorithm 2
-        #   traditional_rule_application(matcher, previous_application_of_rule)                           # line 12 of Algorithm 2
+        #   traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)                           # line 12 of Algorithm 2
         # end                                                               # line 13 of Algorithm 2
       # elsif rule == calling_rule && matcher.growing[rule].has_key?(pos) # line 14 of Algorithm 2 - if we have a seed growing for `rule` at `pos`...
       elsif is_rule_in_left_recursion_at_current_position                 # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
@@ -341,7 +400,9 @@ module PegParser
         while true                                                        # line 18 of Algorithm 2 - this loop switches to a Warth et al.-style iterative bottom-up parser
           # parse_tree = eval(matcher, calling_rule, calling_rule_pos)    # line 19 of Algorithm 2 - this is wrong; we need to apply the rule in traditional style instead
           matcher.pos = pos
-          parse_tree = traditional_rule_application(matcher, previous_application_of_rule)      # line 19 of Algorithm 2
+          # puts "pre-traditional-apply call stack: #{matcher.expr_call_stack.inspect}"
+          parse_tree = traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)      # line 19 of Algorithm 2
+          # puts "post-traditional-apply call stack: #{matcher.expr_call_stack.inspect}"
           seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
           if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
             matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
@@ -362,7 +423,7 @@ module PegParser
             # so that it can return the seed parse tree, and we will make this rule application (and all intermediate rule applications 
             # that happened between this one and `previous_application_of_rule`) fail, which will give `previous_application_of_rule` the
             # opportunity to return the seed parse tree. Then parsing can continue as normal.
-            retval = if is_this_application_left_recursive && 
+            returning_seed_parse_tree = if is_this_application_left_recursive && 
                         previous_application_of_rule && !previous_application_of_rule.left_recursive?  # we know with 100% certainty that `previous_application_of_rule` is not nil, because the only way for current_rule_application to be left_recursive (which we establish earlier in this condition) is if previous_application_of_rule is not nil. In other words, `is_this_application_left_recursive==true` implies `!previous_application_of_rule.nil?`
               if seed_parse_tree
                 previous_application_of_rule.seed_parse_tree = seed_parse_tree
@@ -372,7 +433,8 @@ module PegParser
             else
               seed_parse_tree
             end
-            return retval
+            pop_rule_application(matcher)
+            return returning_seed_parse_tree
 
             # return seed_parse_tree                                      # line 23 of Algorithm 2
           end                                                             # line 24 of Algorithm 2
@@ -381,16 +443,19 @@ module PegParser
       else                                                                # line 27 of Algorithm 2
         if matcher.limit.includes?(rule.name)                             # line 28 of Algorithm 2
           matcher.limit.delete(rule.name)                                 # line 29 of Algorithm 2
-          parse_tree = traditional_rule_application(matcher, previous_application_of_rule)              # line 30 of Algorithm 2
+          parse_tree = traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)              # line 30 of Algorithm 2
           matcher.limit.add(rule.name)                                    # line 31 of Algorithm 2
           parse_tree
         else                                                              # line 32 of Algorithm 2
-          traditional_rule_application(matcher, previous_application_of_rule)                           # line 33 of Algorithm 2
+          traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)                           # line 33 of Algorithm 2
         end                                                               # line 34 of Algorithm 2
       end                                                                 # line 35 of Algorithm 2
+
+      pop_rule_application(matcher)
+      retval
     end                                                                   # line 36 of Algorithm 2
 
-    def traditional_rule_application(matcher, previous_application_of_rule) : ParseTree?
+    def traditional_rule_application(matcher, previous_application_of_rule, current_rule_application) : ParseTree?
       name = @rule_name
 
       if matcher.has_memoized_result?(name)
@@ -400,14 +465,14 @@ module PegParser
         origPos = matcher.pos
         rule = matcher.rules[name]
 
-        is_this_application_left_recursive = !!previous_application_of_rule
+        # is_this_application_left_recursive = !!previous_application_of_rule
 
-        current_rule_application = push_rule_application(matcher, rule, origPos, is_this_application_left_recursive)
+        # current_rule_application = push_rule_application(matcher, rule, origPos, is_this_application_left_recursive)
 
         parse_tree = rule.expr.eval(matcher)
         # matcher.memoize_result(origPos, name, parse_tree)
 
-        current_rule_application = pop_rule_application(matcher)
+        # current_rule_application = pop_rule_application(matcher)
 
         if matcher.fail_all_rules?
           if current_rule_application == matcher.fail_all_rules_until_this_rule
@@ -429,20 +494,22 @@ module PegParser
     end
 
     def push_rule_application(matcher, rule, pos, is_this_application_left_recursive)
-      current_rule_application = RuleApplication.new(rule, pos, is_this_application_left_recursive)
-
-      # push the new rule application of rule `rule` at position `origPos` onto the rule call stack
-      matcher.rule_call_stack.push(current_rule_application)
-
+      current_rule_application = ApplyCall.new(rule, pos, is_this_application_left_recursive)
+      matcher.push_onto_call_stack(current_rule_application)
       current_rule_application
     end
 
-    def pop_rule_application(matcher)
-      matcher.rule_call_stack.pop   # pop `current_rule_application` off the stack
+    def pop_rule_application(matcher) : ApplyCall
+      expr_call = matcher.pop_off_of_call_stack
+      expr_call.is_a?(ApplyCall) ? expr_call : raise "unexpected ExprCall on call stack. expected an ApplyCall."
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       @rule_name == calling_rule.name   # something like the following will be needed if we ever need to cope with indirect right recursion: || matcher.rules[@rule_name].expr.direct_definite_right_recursive?(calling_rule, matcher)
+    end
+
+    def to_s
+      "apply(#{@rule_name})"
     end
   end
 
@@ -458,14 +525,19 @@ module PegParser
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
+      matcher.push_onto_call_stack(TerminalCall.new(self, matcher.pos))
+
       orig_pos = matcher.pos
       terminal_matches = @str.each_char.all? do |c|
         if matcher.eof?
           matcher.pos = orig_pos
+          matcher.pop_off_of_call_stack
           return nil
         end
         matcher.consume(c)
       end
+
+      matcher.pop_off_of_call_stack
       if terminal_matches
         ParseTree.new(@str, matcher.pos - 1)
       end
@@ -473,6 +545,10 @@ module PegParser
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       false
+    end
+
+    def to_s
+      "term(\"#{@str}\")"
     end
   end
 
@@ -487,18 +563,36 @@ module PegParser
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
+      matcher.push_onto_call_stack(ChoiceCall.new(self, matcher.pos))
+
       origPos = matcher.pos
       @exps.reject {|expr| expr.is_a?(PosLookAhead) || expr.is_a?(NegLookAhead) }.each do |expr|
-        return nil if matcher.fail_all_rules?
+        if matcher.fail_all_rules?
+          matcher.pop_off_of_call_stack
+          return nil
+        end
         matcher.pos = origPos
         parse_tree = expr.eval(matcher)
-        return parse_tree if parse_tree
+        if parse_tree
+          matcher.pop_off_of_call_stack
+          return parse_tree
+        end
       end
+
+      matcher.pop_off_of_call_stack
       nil
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       @exps.any?(&.direct_definite_right_recursive?(calling_rule, matcher))
+    end
+
+    def to_s
+      if @exps.size > 1
+        "(#{@exps.map(&.to_s).join(" | ")})"
+      else
+        @exps.first.to_s
+      end
     end
   end
 
@@ -513,6 +607,8 @@ module PegParser
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
+      matcher.push_onto_call_stack(SequenceCall.new(self, matcher.pos))
+
       ans = [] of ParseTree
       start_pos = matcher.pos
 
@@ -520,16 +616,26 @@ module PegParser
         parse_tree = expr.eval(matcher)
         if parse_tree.nil? || matcher.fail_all_rules?
           matcher.pos = start_pos
+          matcher.pop_off_of_call_stack
           return nil
         end
         ans.push(parse_tree) unless expr.is_a?(NegLookAhead) || expr.is_a?(PosLookAhead)
       end
 
+      matcher.pop_off_of_call_stack
       ParseTree.new(ans, matcher.pos - 1)
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       @exps.last?.try(&.direct_definite_right_recursive?(calling_rule, matcher))
+    end
+
+    def to_s
+      if @exps.size > 1
+        "(#{@exps.map(&.to_s).join(" ")})"
+      else
+        @exps.first.to_s
+      end
     end
   end
 
@@ -545,15 +651,22 @@ module PegParser
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
+      matcher.push_onto_call_stack(NegLookAheadCall.new(self, matcher.pos))
+
       origPos = matcher.pos
       expr_does_not_match = !@exp.eval(matcher)
       matcher.pos = origPos
+      matcher.pop_off_of_call_stack
       return nil if matcher.fail_all_rules?
       ParseTree.new(expr_does_not_match, -1) if expr_does_not_match
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       false
+    end
+
+    def to_s
+      "!#{@exp.to_s}"
     end
   end
 
@@ -569,15 +682,22 @@ module PegParser
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
+      matcher.push_onto_call_stack(PosLookAheadCall.new(self, matcher.pos))
+
       origPos = matcher.pos
       expr_matches = !!@exp.eval(matcher)
       matcher.pos = origPos
+      matcher.pop_off_of_call_stack
       return nil if matcher.fail_all_rules?
       ParseTree.new(expr_matches, -1) if expr_matches
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       false
+    end
+
+    def to_s
+      "&#{@exp.to_s}"
     end
   end
 
@@ -592,6 +712,8 @@ module PegParser
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
+      matcher.push_onto_call_stack(OptionalCall.new(self, matcher.pos))
+
       ans = [] of ParseTree
 
       origPos = matcher.pos
@@ -601,6 +723,9 @@ module PegParser
       else
         matcher.pos = origPos
       end
+
+      matcher.pop_off_of_call_stack
+
       return nil if matcher.fail_all_rules?
 
       ParseTree.new(ans, matcher.pos - 1)
@@ -608,6 +733,10 @@ module PegParser
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       false
+    end
+
+    def to_s
+      "#{@exp.to_s}?"
     end
   end
 
@@ -622,25 +751,38 @@ module PegParser
     # returns Array(ParseTree) | Nil
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
+
+      matcher.push_onto_call_stack(RepetitionCall.new(self, matcher.pos))
       
       ans = [] of ParseTree
       loop do
         origPos = matcher.pos
         parse_tree = @exp.eval(matcher)
         if parse_tree
-          return nil if matcher.fail_all_rules?
+          if matcher.fail_all_rules?
+            matcher.pop_off_of_call_stack
+            return nil
+          end
           ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
         else
           matcher.pos = origPos
-          return nil if matcher.fail_all_rules?
+          if matcher.fail_all_rules?
+            matcher.pop_off_of_call_stack
+            return nil
+          end
           break
         end
       end
+      matcher.pop_off_of_call_stack
       ParseTree.new(ans, matcher.pos - 1)
     end
 
     def direct_definite_right_recursive?(calling_rule, matcher)
       false
+    end
+
+    def to_s
+      "#{@exp.to_s}*"
     end
   end
 
@@ -656,6 +798,8 @@ module PegParser
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
+      matcher.push_onto_call_stack(RepetitionCall.new(self, matcher.pos))
+
       ans = [] of ParseTree
       start_pos = matcher.pos
 
@@ -663,15 +807,22 @@ module PegParser
         origPos = matcher.pos
         parse_tree = @exp.eval(matcher)
         if parse_tree
-          return nil if matcher.fail_all_rules?
+          if matcher.fail_all_rules?
+            matcher.pop_off_of_call_stack
+            return nil
+          end
           ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
         else
           matcher.pos = origPos
-          return nil if matcher.fail_all_rules?
+          if matcher.fail_all_rules?
+            matcher.pop_off_of_call_stack
+            return nil
+          end
           break
         end
       end
 
+      matcher.pop_off_of_call_stack
       if ans.size >= 1
         ParseTree.new(ans, matcher.pos - 1)
       else
@@ -683,26 +834,10 @@ module PegParser
     def direct_definite_right_recursive?(calling_rule, matcher)
       @exp.direct_definite_right_recursive?(calling_rule, matcher)
     end
-  end
 
-  # this is a special expr node - it is only used for kicking off the matcher's start rule - it won't be used anywhere else
-  class StartExpr
-    @expr : Expr
-
-    def initialize(expr)
-      @expr = expr
-    end
-
-    def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
-
-      parse_tree = @expr.eval(matcher)
-      return nil if matcher.fail_all_rules?
-      parse_tree
-    end
-
-    def direct_definite_right_recursive?(calling_rule, matcher)
-      false
+    def to_s
+      "#{@exp.to_s}+"
     end
   end
+
 end

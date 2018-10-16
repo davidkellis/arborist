@@ -143,7 +143,7 @@ describe PegParser do
     end
 
     it "allows rules that are left-recursion and not right-recursive" do
-      expr = choice([ seq([ apply("expr"), term("-"), apply("num")] of Expr), apply("num")] of Expr)    # expr -> expr - num / num
+      expr = choice([ seq([ apply("expr"), term("-"), apply("num")] of Expr), apply("num")] of Expr)    # expr -> expr - num | num
       num = plus(range('0'..'9'))                                                                       # num -> [0-9]+
       m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
@@ -160,7 +160,7 @@ describe PegParser do
     end
 
     it "allows rules that are right-recursive and not left-recursive" do
-      expr = choice([ seq([ apply("num"), term("-"), apply("expr")] of Expr), apply("num")] of Expr)    # expr -> expr - num / num
+      expr = choice([ seq([ apply("num"), term("-"), apply("expr")] of Expr), apply("num")] of Expr)    # expr -> expr - num | num
       num = plus(range('0'..'9'))                                                                       # num -> [0-9]+
       m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
