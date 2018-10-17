@@ -18,8 +18,6 @@
 # unique expression e such that (A <- e) ∈ R.
 
 module PegParser
-  VERSION = "0.1.0"
-
   module DSL
     ALPHABET = ((' '..'~').map(&.to_s) + ["\n"] + ["\t"])
 
@@ -95,8 +93,27 @@ module PegParser
     def initialize(@matcher, @name, @expr)
     end
 
+    def to_s
+      "#{@name} -> #{@expr.to_s}"
+    end
+
     def direct_definite_right_recursive?
       @direct_definite_right_recursive ||= @expr.direct_definite_right_recursive?(self, @matcher)
+    end
+
+    # tail expressions are expressions in a rule that are guaranteed to be the last expression to be evaluated
+    # as part of an application of this rule
+    # For example, given `foo -> bar baz* | qux`, {qux} is the set of tail expressions for rule `foo`, because `bar` may, but is not
+    # guaranteed to be the last expression applied in the `bar baz*` branch. Any evaluation of the `qux` expression is guaranteed to
+    # be the last expression evaluated in evaluation of the `qux` branch.
+    def tail_expressions : Array(Expr)
+      Array(Expr).new
+    end
+
+    # potential tail expressions are expressions in a rule that may (or may not, depending on the string being matched) be 
+    # the last expression to be evaluated as part of an application of this rule
+    # For example, given `foo -> bar baz* | qux`, {bar, baz, qux} is the set of tail expressions for rule `foo`.
+    def potential_tail_expressions
     end
   end
 
@@ -133,21 +150,22 @@ module PegParser
   end
 
   class ApplyCall < ExprCall
-    getter rule : Rule
     # property expr : Expr   # inherited from ExprCall
     # property pos : Int32   # inherited from ExprCall
+    getter rule : Rule
     property left_recursive : Bool
     property seed_parse_tree : ParseTree?
 
-    def initialize(@rule, @pos, @left_recursive = false)
-      @expr = @rule.expr
+    def initialize(apply_expr : Apply, @rule, @pos, @left_recursive = false)
+      @expr = apply_expr
       @seed_parse_tree = nil
     end
 
     def inspect(io)
-      io.print("#{self.class.name}:#{self.object_id} at #{@pos}: #{@rule.name} -> #{@expr.to_s}")
+      io.print("#{self.class.name}:#{self.object_id} at #{@pos}: #{@rule.name} -> #{@rule.expr.to_s}")
     end
 
+    # returns true if this rule application is left recursive at `@pos`; false otherwise
     def left_recursive?
       @left_recursive
     end
@@ -245,6 +263,32 @@ module PegParser
         return expr_application_i if expr_application_i.rule == rule && expr_application_i.left_recursive?
       end
       nil
+    end
+
+    def lookup_previous_rule_application(rule) : ApplyCall?
+      i = @expr_call_stack.size - 1
+      while i >= 0
+        expr_application_i = @expr_call_stack[i]
+        i -= 1
+        next unless expr_application_i.is_a?(ApplyCall)
+        return expr_application_i if expr_application_i.rule == rule
+      end
+      nil
+    end
+
+    def current_rule_being_applied : Rule?
+      i = @expr_call_stack.size - 1
+      while i >= 0
+        expr_application_i = @expr_call_stack[i]
+        i -= 1
+        next unless expr_application_i.is_a?(ApplyCall)
+        return expr_application_i.rule
+      end
+      nil
+    end
+
+    def left_recursive_rule_applications(rule) : Array(ApplyCall)
+      @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.rule == rule }.as(Array(ApplyCall))
     end
 
     def fail_all_rules_back_to(previous_application_of_rule : ApplyCall)
@@ -352,12 +396,12 @@ module PegParser
       pos = matcher.pos
 
       # has this same rule been applied at the same position previously?
-      previous_application_of_rule = matcher.lookup_rule_application_in_call_stack(rule, pos)
-      # if previous_application_of_rule != nil, then a previous application of rule `rule` was attempted at position `pos`, 
+      previous_application_of_rule_at_pos = matcher.lookup_rule_application_in_call_stack(rule, pos)
+      # if previous_application_of_rule_at_pos != nil, then a previous application of rule `rule` was attempted at position `pos`, 
       # so this application - once it is performed via a call to #traditional_rule_application - is going to be a left recursive 
       # application of the same rule
 
-      is_this_application_left_recursive = !!previous_application_of_rule
+      is_this_application_left_recursive_at_pos = !!previous_application_of_rule_at_pos
 
       # look up the most recent left-recursive application of this rule, occurring at any position
       previous_left_recursive_application_of_rule = matcher.lookup_left_recursive_rule_application(rule)
@@ -368,9 +412,28 @@ module PegParser
       # if we're already in left recursion on `rule` and we have a seed growing for `rule` at `pos`, then we are in left recursion on rule `rule` at position `pos`
       is_rule_in_left_recursion_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
 
-      is_this_application_right_recursive = false   # is_this_application_recursive && ???
+      previous_rule_being_applied = matcher.current_rule_being_applied    # we haven't pushed on *this* application of the rule onto the expr stack, so `matcher.current_rule_being_applied` represents the most recent rule application prior to this rule application of `rule`.
+      # is_this_application_right_recursive = if previous_rule_being_applied
+      #   previous_application_of_rule_at_any_position = matcher.lookup_previous_rule_application(rule)  # an earlier application of this same rule
+      #   previous_application_of_rule_at_any_position && previous_rule_being_applied.tail_expressions.includes?(self)
+      # else
+      #   false
+      # end
+      is_this_application_right_recursive = false
 
-      current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive)
+      # We want to maximally grow the seed at the first occurrence of a left-recursive rule application of `rule`.
+      # We want to minimally grow the seeds of all other left-recursive rule application of `rule` that occur while we are still
+      # growing the seed associated with the first occurrence of a left-recursive rule application of `rule`.
+      # This means that the first occurrence of left recursive seed growth for `rule` should continue until it can't grow anymore, but all
+      # other occurrences of left recursive seed growth for `rule` should only grow once level and then fail.
+      #
+      # The rule of seed growth is:
+      # Only the top-level seed growth for a given rule may allow left recursive calls; deeper-level seed growth on the
+      # same rule may not be made up of any left-recursive calls.
+      # left_recursive_rule_applications_for_rule = matcher.left_recursive_rule_applications(rule)
+      # number_of_occurrences_of_left_recursion_for_rule = left_recursive_rule_applications_for_rule.size
+
+      current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
 
       # if false && rule == calling_rule && rule.direct_definite_right_recursive?    # line 4 of Algorithm 2
       retval = if is_this_application_right_recursive                              # line 4 of Algorithm 2
@@ -378,13 +441,13 @@ module PegParser
         #   nil                                                             # line 6 of Algorithm 2
         # elsif matcher.growing[rule].has_key?(calling_rule_pos)            # line 7 of Algorithm 2
         #   matcher.limit.add(rule.name)                                    # line 8 of Algorithm 2
-        #   parse_tree = traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)              # line 9 of Algorithm 2
+        #   parse_tree = traditional_rule_application(matcher, current_rule_application)              # line 9 of Algorithm 2
         #   matcher.limit.delete(rule.name)                                 # line 10 of Algorithm 2
         #   parse_tree
         # else                                                              # line 11 of Algorithm 2
-        #   traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)                           # line 12 of Algorithm 2
+        #   traditional_rule_application(matcher, current_rule_application)                           # line 12 of Algorithm 2
         # end                                                               # line 13 of Algorithm 2
-      # elsif rule == calling_rule && matcher.growing[rule].has_key?(pos) # line 14 of Algorithm 2 - if we have a seed growing for `rule` at `pos`...
+      # elsif rule == calling_rule && matcher.growing[rule].has_key?(pos) # line 14 of Algorithm 2 - second+ LR call at pos - if we have a seed growing for `rule` at `pos`...
       elsif is_rule_in_left_recursion_at_current_position                 # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
         # matcher.growing[rule][pos]                                      # line 15 of Algorithm 2
         seed_parse_tree = matcher.growing[rule][pos]
@@ -395,59 +458,98 @@ module PegParser
         end
         seed_parse_tree
       # elsif rule == calling_rule && pos == calling_rule_pos             # line 16 of Algorithm 2 - left recursive rule application, no input consumed since last application of `rule` at `pos`
-      elsif is_this_application_left_recursive                            # line 16 of Algorithm 2 - left recursive rule application, no input consumed since last application of `rule` at `pos`
-        matcher.growing[rule][pos] = nil                                  # line 17 of Algorithm 2
-        while true                                                        # line 18 of Algorithm 2 - this loop switches to a Warth et al.-style iterative bottom-up parser
-          # parse_tree = eval(matcher, calling_rule, calling_rule_pos)    # line 19 of Algorithm 2 - this is wrong; we need to apply the rule in traditional style instead
-          matcher.pos = pos
-          # puts "pre-traditional-apply call stack: #{matcher.expr_call_stack.inspect}"
-          parse_tree = traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)      # line 19 of Algorithm 2
-          # puts "post-traditional-apply call stack: #{matcher.expr_call_stack.inspect}"
-          seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
-          if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
-            matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
-            if seed_parse_tree
-              matcher.pos = seed_parse_tree.finishing_pos + 1
-            else
-              matcher.pos = pos
-            end
-            
-            # now that we're finished growing the seed...
-            # If this rule application was left recursive, but the previous one wasn't left recursive, then we know that the parse tree
-            # returned by this rule application is the seed parse tree. Since the seed is done growing, then `seed_parse_tree`
-            # is what we would like for the previous (non-recursive) rule application - `previous_application_of_rule` - to
-            # return as its parse tree -- but only if the seed doesn't represent a parse error. If the seed reprsents a parse error, 
-            # then we just want to return nil, like a normal failed rule application. That will bail us out of left-recursion mode, 
-            # and give the rule's other alternatives a chance to match on the original non-left-recursive application of `rule`.
-            # In order to do that, we're going to store the seed parse tree in the `previous_application_of_rule`
-            # so that it can return the seed parse tree, and we will make this rule application (and all intermediate rule applications 
-            # that happened between this one and `previous_application_of_rule`) fail, which will give `previous_application_of_rule` the
-            # opportunity to return the seed parse tree. Then parsing can continue as normal.
-            returning_seed_parse_tree = if is_this_application_left_recursive && 
-                        previous_application_of_rule && !previous_application_of_rule.left_recursive?  # we know with 100% certainty that `previous_application_of_rule` is not nil, because the only way for current_rule_application to be left_recursive (which we establish earlier in this condition) is if previous_application_of_rule is not nil. In other words, `is_this_application_left_recursive==true` implies `!previous_application_of_rule.nil?`
-              if seed_parse_tree
-                previous_application_of_rule.seed_parse_tree = seed_parse_tree
-                matcher.fail_all_rules_back_to(previous_application_of_rule)
-              end
-              nil
-            else
-              seed_parse_tree
-            end
-            pop_rule_application(matcher)
-            return returning_seed_parse_tree
+      elsif is_this_application_left_recursive_at_pos                     # line 16 of Algorithm 2 - first LR call at pos - left recursive rule application, no input consumed since last application of `rule` at `pos`
+        # Here, we are starting to grow a seed on a left-recursive call.
+        # We can only grow a single seed for a given rule at a time. All other would-be seed-growths for the same rule must fail,
+        # in order to ensure the left-most seed growth consumes as much as possible.
+        # Therefore, if we detect that this recursive call is a top-level seed growth for `rule`, then we want to grow the seed
+        # as much as we can; otherwise, we conclude that this is not a top-level seed growth, and therefore needs to fail - i.e.
+        # the non-top-level seed will start as nil, but will never be updated and the first parse tree returned from the first-level, 
+        # second-level, third-level, etc.-level left-recursive call will be treated as the parse tree for those left-recursive
+        # calls.
 
-            # return seed_parse_tree                                      # line 23 of Algorithm 2
-          end                                                             # line 24 of Algorithm 2
-          matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
-        end                                                               # line 26 of Algorithm 2
+        number_of_seeds_being_grown_for_rule = matcher.growing[rule]?.try(&.size) || 0
+        if number_of_seeds_being_grown_for_rule == 0
+          # if this is a top-level seed growth for `rule`, then do the following:
+          matcher.growing[rule][pos] = nil                                  # line 17 of Algorithm 2
+          while true                                                        # line 18 of Algorithm 2 - this loop switches to a Warth et al.-style iterative bottom-up parser
+            # parse_tree = eval(matcher, calling_rule, calling_rule_pos)    # line 19 of Algorithm 2 - this is wrong; we need to apply the rule in traditional style instead
+            matcher.pos = pos
+            # puts "pre-traditional-apply call stack: #{matcher.expr_call_stack.inspect}"
+            parse_tree = traditional_rule_application(matcher, current_rule_application)      # line 19 of Algorithm 2
+            # puts "post-traditional-apply call stack: #{matcher.expr_call_stack.inspect}"
+            seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
+            if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
+              matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
+              if seed_parse_tree
+                matcher.pos = seed_parse_tree.finishing_pos + 1
+              else
+                matcher.pos = pos
+              end
+              
+              # now that we're finished growing the seed...
+              # If this rule application was left recursive, but the previous one wasn't left recursive, then we know that the parse tree
+              # returned by this rule application is the seed parse tree. Since the seed is done growing, then `seed_parse_tree`
+              # is what we would like for the previous (non-recursive) rule application - `previous_application_of_rule_at_pos` - to
+              # return as its parse tree -- but only if the seed doesn't represent a parse error. If the seed reprsents a parse error, 
+              # then we just want to return nil, like a normal failed rule application. That will bail us out of left-recursion mode, 
+              # and give the rule's other alternatives a chance to match on the original non-left-recursive application of `rule`.
+              # In order to do that, we're going to store the seed parse tree in the `previous_application_of_rule_at_pos`
+              # so that it can return the seed parse tree, and we will make this rule application (and all intermediate rule applications 
+              # that happened between this one and `previous_application_of_rule_at_pos`) fail, which will give `previous_application_of_rule_at_pos` the
+              # opportunity to return the seed parse tree. Then parsing can continue as normal.
+              returning_seed_parse_tree = if is_this_application_left_recursive_at_pos && 
+                          previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?  # we know with 100% certainty that `previous_application_of_rule_at_pos` is not nil, because the only way for current_rule_application to be left_recursive (which we establish earlier in this condition) is if previous_application_of_rule_at_pos is not nil. In other words, `is_this_application_left_recursive_at_pos==true` implies `!previous_application_of_rule_at_pos.nil?`
+                if seed_parse_tree
+                  previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
+                  matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)
+                end
+                nil
+              else
+                seed_parse_tree
+              end
+              pop_rule_application(matcher)
+              return returning_seed_parse_tree
+
+              # return seed_parse_tree                                      # line 23 of Algorithm 2
+            end                                                             # line 24 of Algorithm 2
+            matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
+          end                                                               # line 26 of Algorithm 2
+        else
+          # otherwise, we are starting a deeper level seed growth, and we only want the seed to grow so long as it doesn't grow
+          # by means of further left-recursion; so, we need to start a new seed growth with a nil seed, but we are never going
+          # to update the seed, thereby ensuring that any any further left-recursion on `rule` at `pos` fails
+
+          matcher.growing[rule][pos] = nil                                  # line 17 of Algorithm 2
+
+          matcher.pos = pos
+          seed_parse_tree = traditional_rule_application(matcher, current_rule_application)      # line 19 of Algorithm 2
+          matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
+          if seed_parse_tree
+            matcher.pos = seed_parse_tree.finishing_pos + 1
+          else
+            matcher.pos = pos
+          end
+          
+          if previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?
+            if seed_parse_tree
+              previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
+              matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)
+            end
+            nil
+          else
+            seed_parse_tree
+          end
+
+        end
       else                                                                # line 27 of Algorithm 2
         if matcher.limit.includes?(rule.name)                             # line 28 of Algorithm 2
           matcher.limit.delete(rule.name)                                 # line 29 of Algorithm 2
-          parse_tree = traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)              # line 30 of Algorithm 2
+          parse_tree = traditional_rule_application(matcher, current_rule_application)              # line 30 of Algorithm 2
           matcher.limit.add(rule.name)                                    # line 31 of Algorithm 2
           parse_tree
         else                                                              # line 32 of Algorithm 2
-          traditional_rule_application(matcher, previous_application_of_rule, current_rule_application)                           # line 33 of Algorithm 2
+          traditional_rule_application(matcher, current_rule_application)                           # line 33 of Algorithm 2
         end                                                               # line 34 of Algorithm 2
       end                                                                 # line 35 of Algorithm 2
 
@@ -455,7 +557,7 @@ module PegParser
       retval
     end                                                                   # line 36 of Algorithm 2
 
-    def traditional_rule_application(matcher, previous_application_of_rule, current_rule_application) : ParseTree?
+    def traditional_rule_application(matcher, current_rule_application) : ParseTree?
       name = @rule_name
 
       if matcher.has_memoized_result?(name)
@@ -465,14 +567,8 @@ module PegParser
         origPos = matcher.pos
         rule = matcher.rules[name]
 
-        # is_this_application_left_recursive = !!previous_application_of_rule
-
-        # current_rule_application = push_rule_application(matcher, rule, origPos, is_this_application_left_recursive)
-
         parse_tree = rule.expr.eval(matcher)
         # matcher.memoize_result(origPos, name, parse_tree)
-
-        # current_rule_application = pop_rule_application(matcher)
 
         if matcher.fail_all_rules?
           if current_rule_application == matcher.fail_all_rules_until_this_rule
@@ -493,8 +589,8 @@ module PegParser
       end
     end
 
-    def push_rule_application(matcher, rule, pos, is_this_application_left_recursive)
-      current_rule_application = ApplyCall.new(rule, pos, is_this_application_left_recursive)
+    def push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
+      current_rule_application = ApplyCall.new(self, rule, pos, is_this_application_left_recursive_at_pos)
       matcher.push_onto_call_stack(current_rule_application)
       current_rule_application
     end

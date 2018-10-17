@@ -178,7 +178,7 @@ describe PegParser do
       e = choice([ seq([ apply("e"), term("-"), apply("e")] of Expr), term("5")] of Expr)    # e -> e - e | 5
       m1 = Matcher.new.add_rule("e", e)
 
-      m1.match("5-5-5", "e").try(&.syntax_tree).should eq [[["5"], "-", ["5"]], "-", ["5"]]   # should parse as (((5)-5)-5)
+      m1.match("5-5-5", "e").try(&.syntax_tree).should eq [["5", "-", "5"], "-", "5"]   # should parse as (((5)-5)-5)
     end
   end
 
