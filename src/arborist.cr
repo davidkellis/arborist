@@ -17,76 +17,10 @@
 # from nonterminals to expressions, and we write R(A) to denote the
 # unique expression e such that (A <- e) ∈ R.
 
+require "./dsl"
+require "./parse_tree"
+
 module Arborist
-  module DSL
-    ALPHABET = ((' '..'~').map(&.to_s) + ["\n"] + ["\t"])
-
-    def label(label : String, expr : Expr) : Expr
-      expr.label(label)
-      expr
-    end
-
-    def term(string : String) : Expr
-      Terminal.new(string)
-    end
-
-    def choice(*alternatives) : Expr
-      choice(alternatives.map(&.as(Expr)).to_a)
-    end
-
-    def choice(alternatives : Array(Expr)) : Expr
-      Choice.new(alternatives)
-    end
-
-    def apply(rule_name : String) : Expr
-      Apply.new(rule_name)
-    end
-
-    def range(chars : Range(Char, Char)) : Expr
-      terms = chars.map {|char| term(char.to_s).as(Expr) }
-      choice(terms)
-    end
-
-    def dot(alphabet = ALPHABET) : Expr
-      terms = alphabet.map {|char| term(char.to_s).as(Expr) }
-      choice(terms)
-    end
-
-    def seq(*exprs) : Expr
-      seq(exprs.map(&.as(Expr)).to_a)
-    end
-
-    def seq(exprs : Array(Expr)) : Expr
-      Sequence.new(exprs)
-    end
-    
-    # this represents the optional operator `?` - 0 or 1 repetitions
-    def opt(expr : Expr) : Expr
-      Optional.new(expr)
-    end
-
-    # this represents the kleene star operator - 0+ repetitions
-    def star(expr : Expr) : Expr
-      Repetition.new(expr)
-    end
-
-    # this represents 1+ repetitions
-    def plus(expr : Expr) : Expr
-      # seq([expr, star(expr)] of Expr)
-      RepetitionOnePlus.new(expr)
-    end
-
-    # not predicate - negative lookahead
-    def neg(expr : Expr) : Expr
-      NegLookAhead.new(expr)
-    end
-    
-    # and predicate - positive lookahead
-    def pos(expr : Expr) : Expr
-      PosLookAhead.new(expr)
-    end
-  end
-
   class MemoResult
     property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
     property nextPos : Int32
@@ -111,8 +45,6 @@ module Arborist
   end
 
   # all ExprCall classes must have one method: #pos
-  # alias ExprCall = ApplyCall | TerminalCall | ChoiceCall | SequenceCall | NegLookAheadCall | PosLookAheadCall | OptionalCall | RepetitionCall | RepetitionOnePlusCall
-
   class ExprCall
     property expr : Expr
     property pos : Int32
@@ -338,31 +270,6 @@ module Arborist
     end
   end
 
-  alias ParseTreeNode = String | Array(ParseTree) | Bool
-
-  alias SyntaxTree = String | Array(SyntaxTree)
-
-  # A nil parse tree means parse error
-  class ParseTree
-    property node : ParseTreeNode
-    property finishing_pos : Int32  # the position within the input string that points at the last character this parse tree captures
-    
-    def initialize(@node, @finishing_pos)
-    end
-
-    def syntax_tree() : SyntaxTree
-      case (node = @node)
-      when String
-        node
-      when Array(ParseTree)
-        node.map {|n| n.syntax_tree.as(SyntaxTree) }
-      when Bool
-        raise "the parse tree is malformed; it has boolean values in it"
-      else
-        raise "the parse tree is malformed; it has nil values in it"
-      end
-    end
-  end
 
   alias Expr = Apply | Terminal | Choice | Sequence | NegLookAhead | PosLookAhead | Optional | Repetition | RepetitionOnePlus
 
@@ -473,7 +380,11 @@ module Arborist
                 seed_parse_tree
               end
               pop_rule_application(matcher)
-              return returning_seed_parse_tree
+              if returning_seed_parse_tree
+                return ApplyTree.new(returning_seed_parse_tree, returning_seed_parse_tree.finishing_pos).label(@label)
+              else
+                return nil
+              end
             end                                                             # line 24 of Algorithm 2
             matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
           end                                                               # line 26 of Algorithm 2
@@ -509,7 +420,9 @@ module Arborist
       end                                                                 # line 35 of Algorithm 2
 
       pop_rule_application(matcher)
-      retval
+      if retval
+        ApplyTree.new(retval, retval.finishing_pos).label(@label)
+      end
     end                                                                   # line 36 of Algorithm 2
 
     def traditional_rule_application(matcher, current_rule_application) : ParseTree?
@@ -592,7 +505,7 @@ module Arborist
 
       matcher.pop_off_of_call_stack
       if terminal_matches
-        ParseTree.new(@str, matcher.pos - 1)
+        TerminalTree.new(@str, matcher.pos - 1).label(@label)
       end
     end
 
@@ -630,7 +543,7 @@ module Arborist
         parse_tree = expr.eval(matcher)
         if parse_tree
           matcher.pop_off_of_call_stack
-          return parse_tree
+          return ChoiceTree.new(parse_tree, parse_tree.finishing_pos).label(@label)
         end
       end
 
@@ -680,7 +593,7 @@ module Arborist
       end
 
       matcher.pop_off_of_call_stack
-      ParseTree.new(ans, matcher.pos - 1)
+      SequenceTree.new(ans, matcher.pos - 1).label(@label)
     end
 
     def to_s
@@ -717,7 +630,7 @@ module Arborist
       matcher.pos = origPos
       matcher.pop_off_of_call_stack
       return nil if matcher.fail_all_rules?
-      ParseTree.new(expr_does_not_match, -1) if expr_does_not_match
+      NegLookAheadTree.new(expr_does_not_match).label(@label) if expr_does_not_match
     end
 
     def to_s
@@ -750,7 +663,7 @@ module Arborist
       matcher.pos = origPos
       matcher.pop_off_of_call_stack
       return nil if matcher.fail_all_rules?
-      ParseTree.new(expr_matches, -1) if expr_matches
+      PosLookAheadTree.new(expr_matches).label(@label) if expr_matches
     end
 
     def to_s
@@ -777,12 +690,12 @@ module Arborist
 
       matcher.push_onto_call_stack(OptionalCall.new(self, matcher.pos))
 
-      ans = [] of ParseTree
+      parse_tree = nil
 
       origPos = matcher.pos
-      parse_tree = @exp.eval(matcher)
-      if parse_tree
-        ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
+      tmp_parse_tree = @exp.eval(matcher)
+      if tmp_parse_tree
+        parse_tree = tmp_parse_tree unless tmp_parse_tree.is_a?(NegLookAheadTree) || tmp_parse_tree.is_a?(PosLookAheadTree)
       else
         matcher.pos = origPos
       end
@@ -791,7 +704,7 @@ module Arborist
 
       return nil if matcher.fail_all_rules?
 
-      ParseTree.new(ans, matcher.pos - 1)
+      OptionalTree.new(parse_tree, matcher.pos - 1).label(@label)
     end
 
     def to_s
@@ -839,7 +752,7 @@ module Arborist
         end
       end
       matcher.pop_off_of_call_stack
-      ParseTree.new(ans, matcher.pos - 1)
+      RepetitionTree.new(ans, matcher.pos - 1).label(@label)
     end
 
     def to_s
@@ -891,7 +804,7 @@ module Arborist
 
       matcher.pop_off_of_call_stack
       if ans.size >= 1
-        ParseTree.new(ans, matcher.pos - 1)
+        RepetitionTree.new(ans, matcher.pos - 1).label(@label)
       else
         matcher.pos = start_pos
         nil
