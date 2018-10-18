@@ -1,9 +1,9 @@
 require "./spec_helper"
 
-include PegParser
-include PegParser::DSL
+include Arborist
+include Arborist::DSL
 
-describe PegParser do
+describe Arborist do
   describe "terminal" do
     it "parses a string" do
       t1 = term("abc")

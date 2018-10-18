@@ -1,2 +1,2 @@
 require "spec"
-require "../src/pegparser"
+require "../src/arborist"

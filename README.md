@@ -1,9 +1,78 @@
-# pegparser
+# arborist
 
-A PEG parser combinator in Crystal.
+Arborist is a PEG parser that supports left and right recursion.
 
-Left recursion is supported via Tratt's Algorithm 2 (see https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/)
-but is subject to the following recursion rules:
+Arborist may be used as a PEG parser combinator library or as a command line tool that parses a given input file according to a grammar file and prints the resulting parse tree.
+
+Features
+- Left recursion
+- Right recursion
+- May be used as a PEG parser combinator library
+- May be used as a command line parser that produces a parse tree for a given input document
+
+
+## Installation
+
+Add this to your application's `shard.yml`:
+
+```yaml
+dependencies:
+  arborist:
+    github: davidkellis/arborist
+```
+
+
+## Usage
+
+### Library
+
+```crystal
+require "arborist"
+
+include Arborist::DSL
+
+# e -> e - e | e + e | num
+# num -> [0-9]+
+e = choice(
+  seq(apply("e"), term("-"), apply("e")), 
+  seq(apply("e"), term("+"), apply("e")), 
+  apply("num")
+)
+num = plus(range('0'..'9'))
+
+matcher = Matcher.new.add_rule("e", e).add_rule("num", num)
+
+puts "parse tree:"
+puts m1.match("1-2+3-4+5", "e").try(&.syntax_tree)
+```
+
+prints
+
+```
+parse tree:
+[[[[["1"], "-", ["2"]], "+", ["3"]], "-", ["4"]], "+", ["5"]]
+```
+
+### Command Line Interface
+
+```bash
+$ cat mygrammar.g
+E = E - E | E + E | Num
+Num = ("0".."9")+
+
+$ cat input_document.txt
+1-2+3-4+5
+
+$ arborist -g mygrammar.g input_document.txt
+[[[[["1"], "-", ["2"]], "+", ["3"]], "-", ["4"]], "+", ["5"]]
+```
+
+
+## Implementation Notes
+
+Left recursion is supported via something approximating Tratt's Algorithm 2 (see https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/)
+
+Tratt's Algorithm 2 is subject to the following recursion rules:
 1. Non-left-recursive rules are allowed to have potential right-recursion. (Section 6.3, second to last paragraph.)
    Non-left-recursive rules can safely include potentially (direct or indirect) right-recursive calls. (Section 6.1, last paragraph).
 2. Left-recursive rules must either have no right-recursion or definite right-recursion. (Section 6.3, second to last paragraph.)
@@ -25,20 +94,3 @@ Note: I believe my definitions of left-recursion and right-recursion more closel
 Rules:
 1. A left-recursive must either be (1) not right-recursive, or (2) directly and definitely right-recursive.
 2. It is unknown whether indirect left-recursion will work or not, therefore, it is suggested that indirect left-recursion be avoided.
-
-
-## Installation
-
-Add this to your application's `shard.yml`:
-
-```yaml
-dependencies:
-  pegparser:
-    github: davidkellis/pegparser
-```
-
-## Usage
-
-```crystal
-require "pegparser"
-```

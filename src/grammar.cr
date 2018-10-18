@@ -1,9 +1,9 @@
-require "./pegparser"
+require "./arborist"
 
-module PegParser
+module Arborist
   class Grammar
     module Rules
-      include PegParser::DSL
+      include Arborist::DSL
 
       # grammar rules taken from:
       # https://github.com/harc/ohm/blob/master/src/ohm-grammar.ohm
@@ -166,8 +166,12 @@ module PegParser
       @matcher = nil
     end
 
-    def load(path : String)
+    def load_grammar_file(path : String)
       grammar_defn = File.read(path)
+      load_grammar(grammar_defn)
+    end
+
+    def load_grammar(grammar_defn : String)
       @matcher = build_matcher(grammar_defn)
     end
 
