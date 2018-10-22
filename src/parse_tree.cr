@@ -21,6 +21,7 @@ module Arborist
     property finishing_pos : Int32  # the position within the input string that points at the last character this parse tree captures
     property parent : ParseTree?
     @captures : Hash(String, Array(ParseTree))?
+    @local_captures : Hash(String, Array(ParseTree))?
     
     def initialize
       @input = ""
@@ -44,24 +45,53 @@ module Arborist
     
     # the following query methods are useful for exploring and querying the parse tree
 
+    def labeled?
+      !!@label
+    end
+
     def root?
       @parent.nil?
     end
 
-    def capture(name : String) : ParseTree?
+    def preorder_traverse(visit : ParseTree -> _)
+      visit.call(self)
+      children.each {|child| child.preorder_traverse(visit) }
+    end
+
+    def postorder_traverse(visit : ParseTree -> _)
+      children.each {|child| child.preorder_traverse(visit) }
+      visit.call(self)
+    end
+
+    def capture(name : String) : ParseTree
+      capture?(name) || raise("Unknown capture reference: #{name}")
+    end
+
+    def capture?(name : String) : ParseTree?
       captures(name).first?
     end
 
     def captures(name : String) : Array(ParseTree)
-      captures[name]?
+      captures[name]? || [] of ParseTree
     end
     
     def captures : Hash(String, Array(ParseTree))
-      @captures ||= terms.reduce({} of String => Array(ParseTree)) do |captures, term|
-        child_tree_node_label = term.label || (term.is_a?(ApplyTree) && term.rule_name)
+      @captures ||= children.reject(&.is_a?(ApplyTree)).reduce(local_captures()) do |captures, child|
+        child.captures.each do |child_capture_string, child_captures|
+          captures[child_capture_string] ||= [] of ParseTree
+          captures[child_capture_string].concat(child_captures)
+        end
+        captures
+      end
+    end
+
+    def local_captures : Hash(String, Array(ParseTree))
+      @local_captures ||= children.reduce({} of String => Array(ParseTree)) do |captures, child|
+        child_tree_node_label = child.label || (child.is_a?(ApplyTree) && child.rule_name)
         if child_tree_node_label
+          child_tree_node_label = child_tree_node_label.as(String)
           captures[child_tree_node_label] ||= [] of ParseTree
-          captures[child_tree_node_label] << child_tree_node
+          captures[child_tree_node_label] << child
         end
         captures
       end
@@ -71,7 +101,7 @@ module Arborist
       children.first
     end
 
-    def child? : ParseTree
+    def child? : ParseTree?
       children.first?
     end
 
@@ -80,6 +110,19 @@ module Arborist
     # Another way of thinking about this is #children returns concrete children, #terms returns logical children.
     def children : Array(ParseTree)
       raise "ParseTree#children is an abstract method"
+    end
+
+    # returns all descendants listed out in a pre-order traversal
+    def descendants : Array(ParseTree)
+      nodes = [] of ParseTree
+      accumulate = ->(node : ParseTree) { nodes << node }
+      children.each {|child| child.preorder_traverse(accumulate) }
+      nodes
+    end
+
+    # returns all nodes listed out in a pre-order traversal
+    def self_and_descendants : Array(ParseTree)
+      ([self] of ParseTree).concat(descendants)
     end
 
     def term : ParseTree
@@ -110,6 +153,10 @@ module Arborist
         input[start_pos..finishing_pos]
       end
     end
+
+    def visit(visitor : Visitor(R)) forall R
+      raise "ParseTree#visit is only defined for ApplyTree nodes."
+    end
   end
 
   class ApplyTree < ParseTree
@@ -136,6 +183,10 @@ module Arborist
 
     def terms : Array(ParseTree)
       tree.terms
+    end
+
+    def visit(visitor : Visitor(R)) : R forall R
+      visitor.visit(self)
     end
   end
 
