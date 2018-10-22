@@ -46,8 +46,8 @@ describe Arborist do
       r1 = seq(opt(term("abc")), term("def"))   # "abc"? "def"
       m1 = Matcher.new.add_rule("start", r1)
 
-      m1.match("abcdef").try(&.syntax_tree).should eq [["abc"] of SyntaxTree, "def"] of SyntaxTree   # should == [["abc"], "def"]
-      m1.match("def").try(&.syntax_tree).should eq [[] of SyntaxTree, "def"] of SyntaxTree   # should == [[], "def"]
+      m1.match("abcdef").try(&.syntax_tree).should eq ["abc", "def"] of SyntaxTree   # should == [["abc"], "def"]
+      m1.match("def").try(&.syntax_tree).should eq ["def"] of SyntaxTree   # should == [[], "def"]
     end
   end
 
@@ -212,8 +212,43 @@ describe Arborist do
       m1 = Matcher.new.add_rule("e", e).add_rule("num", num)
 
       # 1-2-3 should parse as (1-2(-3))
-      m1.match("1-2-3", "e").try(&.syntax_tree).should eq [["1"], "-", ["2"], [["-", ["3"]]]]
+      m1.match("1-2-3", "e").try(&.syntax_tree).should eq [["1"], "-", ["2"], ["-", ["3"]]]
     end
   end
+
+  # describe "visitor" do
+  #   it "works" do
+  #     # e = e1=e - e2=e -- subtract
+  #     #   | exprs+=e ("+" exprs+=e)* -- add
+  #     #   | num         -- num
+  #     # num = [0-9]+
+  #     e = choice(
+  #       seq(apply("e").label("e1"), term("-"), apply("e").label("e2")).label("subtract"), 
+  #       seq(apply("e").label("exprs"), star(term("+"), apply("e").label("exprs"))).label("add"), 
+  #       apply("num").label("num")
+  #     )
+  #     num = plus(range('0'..'9'))
+  #     m1 = Matcher.new.add_rule("e", e).add_rule("num", num)
+  #     parse_tree = m1.match("1-2-3", )
+
+  #     eval = Visitor(Int32).new
+      
+  #     eval.on("e_subtract") do |ctx|
+  #       ctx.get("e1").visit - ctx.e2.visit
+  #     end
+  #     eval.on("e_add") do |ctx|
+  #       ctx.all("exprs").map(&.visit)
+  #     end
+  #     eval.on("e_num") do |ctx|
+  #       ctx.num
+  #     end
+
+  #     eval.on("num") do |ctx|
+  #       ctx.text.to_i
+  #     end
+
+  #     eval.visit(parse_tree)
+  #   end
+  # end
 
 end

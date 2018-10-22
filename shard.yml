@@ -1,9 +1,15 @@
 name: arborist
 version: 0.1.0
+crystal: 0.26.1
+license: MIT
 
 authors:
   - david.ellis <david.ellis@rackspace.com>
 
-crystal: 0.26.1
+targets:
+  arborist:
+    main: src/cli.cr
 
-license: MIT
+dependencies:
+  msgpack:
+    github: crystal-community/msgpack-crystal

@@ -68,6 +68,61 @@ $ arborist -g mygrammar.g input_document.txt
 ```
 
 
+## Grammar Definition Syntax
+
+### Labels
+
+Labels be applied to top-level alternatives, rule applications, and terminals.
+
+Multiple terms may be labeled with the same label.
+
+#### Top-level alternatives
+
+Labels may be attached to each of a rule's top-level alternatives.
+If any of the top-level alternatives are labeled, then they must all be labeled.
+
+```
+foo = bar -- label1
+    | baz -- label2
+    | qux -- label3
+```
+
+#### Rule applications
+
+Labels may be attached to any rule application.
+
+```
+foo = l1=bar l2=baz (" " l3=qux)?
+```
+
+#### Terminals
+
+Labels may be attached to terminals.
+
+```
+foo = l1="bar" l2="baz" (" " l3="qux")?
+```
+
+#### Optionals
+
+Labels may be attached to optional terms.
+
+```
+foo = bar l1=bas?
+```
+
+```
+foo = bar l1=("->" bas)?
+```
+
+#### Multiple terms with the same label
+
+When multiple terms are labeled with the same label, any resulting match of those terms is grouped together to form a capture sequence.
+
+```
+list = items+=item ("," items+=item)* (";" items+=item)? items+=(foo | bar | baz)
+```
+
 ## Implementation Notes
 
 Left recursion is supported via something approximating Tratt's Algorithm 2 (see https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/)

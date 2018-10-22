@@ -159,11 +159,27 @@ module Arborist
                           .add_rule("punctuation", Punctuation)
     end
 
+    GrammarVisitor = Visitor.new
+      
+    GrammarVisitor.on("e") do |alt_node|
+      case alt_node.label
+      when "subtract"
+      when "add"
+      when ""
+      end
+    end
+
+
 
     @matcher : Matcher?
 
     def initialize
       @matcher = nil
+    end
+
+    def initialize(grammar_file_path : String)
+      initialize()
+      load_grammar_file(grammar_file_path)
     end
 
     def load_grammar_file(path : String)
@@ -176,7 +192,8 @@ module Arborist
     end
 
     def build_matcher(grammar_defn : String) : Matcher
-      ???
+      parse_tree = Rules::Parser.match(grammar_defn, "Grammar")
+      GrammarVisitor.walk(parse_tree)
     end
 
     def parse_file(path : String)

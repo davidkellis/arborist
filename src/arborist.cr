@@ -19,6 +19,7 @@
 
 require "./dsl"
 require "./parse_tree"
+require "./visitor"
 
 module Arborist
   class MemoResult
@@ -44,7 +45,9 @@ module Arborist
     end
   end
 
-  # all ExprCall classes must have one method: #pos
+  # The various ExprCall classes represent invocations, or calls, of the various expression types, at different positions
+  # in an input string. The invocations/calls form a call stack, because a PEG parser is by nature a recursive descent parser,
+  # and each rule application and the evaluations of the different expressions that make up those rules form a call stack.
   class ExprCall
     property expr : Expr
     property pos : Int32
@@ -98,7 +101,7 @@ module Arborist
 
   class Matcher
     @memoTable : Hash(Int32, Column)
-    @input : String
+    getter input : String
     property pos : Int32
     getter rules : Hash(String, Rule)
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
@@ -135,7 +138,10 @@ module Arborist
 
       start_expr = Apply.new(start_rule_name)
       parse_tree = start_expr.eval(self)
-      parse_tree if @pos == @input.size
+      if parse_tree
+        parse_tree.recursively_populate_parents
+        parse_tree if @pos == @input.size
+      end
     end
 
     # per https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/:
@@ -381,7 +387,7 @@ module Arborist
               end
               pop_rule_application(matcher)
               if returning_seed_parse_tree
-                return ApplyTree.new(returning_seed_parse_tree, returning_seed_parse_tree.finishing_pos).label(@label)
+                return ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
               else
                 return nil
               end
@@ -421,7 +427,7 @@ module Arborist
 
       pop_rule_application(matcher)
       if retval
-        ApplyTree.new(retval, retval.finishing_pos).label(@label)
+        ApplyTree.new(retval, @rule_name, matcher.input, pos, retval.finishing_pos).label(@label)
       end
     end                                                                   # line 36 of Algorithm 2
 
@@ -505,7 +511,7 @@ module Arborist
 
       matcher.pop_off_of_call_stack
       if terminal_matches
-        TerminalTree.new(@str, matcher.pos - 1).label(@label)
+        TerminalTree.new(@str, matcher.input, orig_pos, matcher.pos - 1).label(@label)
       end
     end
 
@@ -543,7 +549,7 @@ module Arborist
         parse_tree = expr.eval(matcher)
         if parse_tree
           matcher.pop_off_of_call_stack
-          return ChoiceTree.new(parse_tree, parse_tree.finishing_pos).label(@label)
+          return ChoiceTree.new(parse_tree, matcher.input, origPos, parse_tree.finishing_pos).label(@label)
         end
       end
 
@@ -593,7 +599,7 @@ module Arborist
       end
 
       matcher.pop_off_of_call_stack
-      SequenceTree.new(ans, matcher.pos - 1).label(@label)
+      SequenceTree.new(ans, matcher.input, start_pos, matcher.pos - 1).label(@label)
     end
 
     def to_s
@@ -630,7 +636,7 @@ module Arborist
       matcher.pos = origPos
       matcher.pop_off_of_call_stack
       return nil if matcher.fail_all_rules?
-      NegLookAheadTree.new(expr_does_not_match).label(@label) if expr_does_not_match
+      NegLookAheadTree.new(expr_does_not_match, matcher.input, origPos).label(@label) if expr_does_not_match
     end
 
     def to_s
@@ -663,7 +669,7 @@ module Arborist
       matcher.pos = origPos
       matcher.pop_off_of_call_stack
       return nil if matcher.fail_all_rules?
-      PosLookAheadTree.new(expr_matches).label(@label) if expr_matches
+      PosLookAheadTree.new(expr_matches, matcher.input, origPos).label(@label) if expr_matches
     end
 
     def to_s
@@ -704,7 +710,7 @@ module Arborist
 
       return nil if matcher.fail_all_rules?
 
-      OptionalTree.new(parse_tree, matcher.pos - 1).label(@label)
+      OptionalTree.new(parse_tree, matcher.input, origPos, matcher.pos - 1).label(@label)
     end
 
     def to_s
@@ -732,6 +738,8 @@ module Arborist
 
       matcher.push_onto_call_stack(RepetitionCall.new(self, matcher.pos))
       
+      start_pos = matcher.pos
+
       ans = [] of ParseTree
       loop do
         origPos = matcher.pos
@@ -752,7 +760,7 @@ module Arborist
         end
       end
       matcher.pop_off_of_call_stack
-      RepetitionTree.new(ans, matcher.pos - 1).label(@label)
+      RepetitionTree.new(ans, matcher.input, start_pos, matcher.pos - 1).label(@label)
     end
 
     def to_s
@@ -804,7 +812,7 @@ module Arborist
 
       matcher.pop_off_of_call_stack
       if ans.size >= 1
-        RepetitionTree.new(ans, matcher.pos - 1).label(@label)
+        RepetitionTree.new(ans, matcher.input, start_pos, matcher.pos - 1).label(@label)
       else
         matcher.pos = start_pos
         nil
