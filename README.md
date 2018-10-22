@@ -31,26 +31,63 @@ require "arborist"
 
 include Arborist::DSL
 
-# e -> e - e | e + e | num
-# num -> [0-9]+
+# build the parser
+
+# e = e1=e - e2=e -- subtract
+#   | exprs+=e ("+" exprs+=e)* -- add
+#   | num         -- num
+# num = [0-9]+
 e = choice(
-  seq(apply("e"), term("-"), apply("e")), 
-  seq(apply("e"), term("+"), apply("e")), 
-  apply("num")
+  seq(apply("e").label("e1"), term("-"), apply("e").label("e2")).label("subtract"), 
+  seq(apply("e").label("exprs"), star(seq(term("+"), apply("e").label("exprs")))).label("add"), 
+  apply("num").label("num")
 )
 num = plus(range('0'..'9'))
+m1 = Matcher.new.add_rule("e", e).add_rule("num", num)
 
-matcher = Matcher.new.add_rule("e", e).add_rule("num", num)
+# parse an expression into a parse tree
 
+parse_tree = m1.match("1-2+10-3+10", "e")
+
+puts "expression: 1-2+10-3+10"
 puts "parse tree:"
-puts m1.match("1-2+3-4+5", "e").try(&.syntax_tree)
+puts parse_tree.try(&.syntax_tree)
+
+# create a visitor to traverse the parse tree
+
+eval = Visitor(Int32).new
+
+eval.on("e_subtract") do |ctx|
+  # ctx.get("e1").visit - ctx.e2.visit
+  # eval.visit(ctx.capture("e1")) - ctx.capture("e2").visit(eval)
+  ctx.capture("e1").visit(eval) - ctx.capture("e2").visit(eval)
+end
+eval.on("e_add") do |ctx|
+  # ctx.all("exprs").map(&.visit)
+  ctx.captures("exprs").map(&.visit(eval)).sum
+end
+eval.on("e_num") do |ctx|
+  ctx.capture("num").visit(eval)
+end
+
+eval.on("num") do |ctx|
+  ctx.text.to_i
+end
+
+# evaluate the visitor against the parse tree
+raise "invalid parse tree" unless parse_tree
+puts "evaluated value:"
+puts eval.visit(parse_tree)
 ```
 
 prints
 
 ```
+expression: 1-2+10-3+10
 parse tree:
-[[[[["1"], "-", ["2"]], "+", ["3"]], "-", ["4"]], "+", ["5"]]
+[[[[["1"], "-", ["2"]], [["+", ["1", "0"]]]], "-", ["3"]], [["+", ["1", "0"]]]]
+evaluated value:
+16
 ```
 
 ### Command Line Interface

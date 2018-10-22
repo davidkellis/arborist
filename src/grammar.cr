@@ -159,15 +159,15 @@ module Arborist
                           .add_rule("punctuation", Punctuation)
     end
 
-    GrammarVisitor = Visitor.new
+    GrammarVisitor = Visitor(String).new
       
-    GrammarVisitor.on("e") do |alt_node|
-      case alt_node.label
-      when "subtract"
-      when "add"
-      when ""
-      end
-    end
+    # GrammarVisitor.on("e") do |alt_node|
+    #   case alt_node.label
+    #   when "subtract"
+    #   when "add"
+    #   when ""
+    #   end
+    # end
 
 
 
