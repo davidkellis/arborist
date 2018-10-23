@@ -11,7 +11,9 @@ Features
 - May be used as a command line parser that produces a parse tree for a given input document
 
 
-## Installation
+## Usage
+
+### Library
 
 Add this to your application's `shard.yml`:
 
@@ -21,10 +23,7 @@ dependencies:
     github: davidkellis/arborist
 ```
 
-
-## Usage
-
-### Library
+Then use it like this:
 
 ```crystal
 require "arborist"
@@ -107,11 +106,76 @@ $ arborist -g mygrammar.g input_document.txt
 
 ## Grammar Definition Syntax
 
+### General
+
+A grammar may consist of the following parsing expressions:
+- Rule application
+- Ordered choice
+- Sequence
+- Terminal
+- Positive look-ahead / And predicate
+- Negative look-ahead / Not predicate
+- Optional
+- Zero-or-more repetition
+- One-or-more repetition
+
+### Grammar Sample
+
+```
+expr
+  = add
+
+addExpr
+  = addExpr "+" addExpr  -- plus
+  | addExpr "-" addExpr  -- minus
+  | mulExpr
+
+mulExpr
+  = mulExpr "*" mulExpr  -- times
+  | mulExpr "/" mulExpr  -- divide
+  | expExpr
+
+expExpr
+  = priExpr "^" expExpr  -- power
+  | priExpr
+
+priExpr
+  = "(" expr ")"  -- paren
+  | "+" priExpr   -- pos
+  | "-" priExpr   -- neg
+  | ident
+  | number
+
+# identifier
+ident
+  = letter alnum*
+
+number
+  = digit* "." digit+  -- decimal
+  | digit+             -- int
+
+alnum
+  = letter
+  | digit
+
+letter
+  = [a-zA-Z]
+
+digit
+  = [0-9]
+```
+
 ### Labels
 
-Labels be applied to top-level alternatives, rule applications, and terminals.
+Labels may be applied to ordered choice alternatives, rule applications, terminals, sequences, 
+optionals, zero+ repetitions, and 1+ repetitions.
 
 Multiple terms may be labeled with the same label.
+
+Labels and their captured terms are aggregated at the rule application level. Specifically, each rule application parse tree node
+is associated with all the labels that appear in that rule. This means that any label associated with any term in the branch of the
+rule specification captured by the parse tree will be available to be referenced within the context of the parse tree node representing
+the application of that rule.
 
 #### Top-level alternatives
 
@@ -119,8 +183,8 @@ Labels may be attached to each of a rule's top-level alternatives.
 If any of the top-level alternatives are labeled, then they must all be labeled.
 
 ```
-foo = bar -- label1
-    | baz -- label2
+foo = bar ("bar"? bar)+ -- label1
+    | baz "123"? -- label2
     | qux -- label3
 ```
 
