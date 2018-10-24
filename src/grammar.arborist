@@ -1,0 +1,109 @@
+// The Arborist PEG definition language is a derivation of the Ohm PEG definition langauge.
+// The Ohm PEG definition language is documented at https://github.com/harc/ohm/blob/master/src/ohm-grammar.ohm
+// The Arborist language adds capture/match labels and removes parameterized rules and grammar inheritance.
+
+Arborist {
+  Grammar
+    = ident "{" Rule* "}"
+    | Rule*
+  
+  Rule
+    = ident "=" RuleBody
+
+  RuleBody
+    = "|"? TopLevelTerm ("|" TopLevelTerm)*
+
+  TopLevelTerm
+    = Seq caseName  -- inline
+    | Seq
+
+  Capture
+  = ident "=" Iter
+
+  Alt
+    = Seq ("|" Seq)*
+
+  Seq
+    = Iter*
+  
+  Iter
+    = Pred "*"  -- star
+    | Pred "+"  -- plus
+    | Pred "?"  -- opt
+    | Pred
+
+  Pred
+    = "~" Lex  -- not
+    | "&" Lex  -- lookahead
+    | Lex
+  
+  Lex
+    = "#" Base  -- lex
+    | Base
+
+  Base
+    = ident ~("=")                              -- application
+    | oneCharTerminal ".." oneCharTerminal      -- range
+    | terminal                                  -- terminal
+    | "(" Alt ")"                               -- paren
+
+  caseName
+    = "--" (~"\n" space)* name (~"\n" space)* ("\n" | &"}")
+
+  name  (a name)
+    = nameFirst nameRest*
+
+  nameFirst
+    = "_"
+    | letter
+
+  nameRest
+    = "_"
+    | alnum
+
+  ident  (an identifier)
+    = name
+
+  terminal
+    = "\"" terminalChar* "\""
+
+  oneCharTerminal
+    = "\"" terminalChar "\""
+
+  terminalChar
+    = escapeChar
+    | ~"\\" ~"\"" ~"\n" any
+
+  escapeChar  (an escape sequence)
+    = "\\\\"                                     -- backslash
+    | "\\\""                                     -- doubleQuote
+    | "\\\'"                                     -- singleQuote
+    | "\\b"                                      -- backspace
+    | "\\n"                                      -- lineFeed
+    | "\\r"                                      -- carriageReturn
+    | "\\t"                                      -- tab
+    | "\\u" hexDigit hexDigit hexDigit hexDigit  -- unicodeEscape
+    | "\\x" hexDigit hexDigit                    -- hexEscape
+
+  space
+    = "\u0000".." "
+    | comment
+
+  // The `syntactic_rule_skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter)
+  // will skip/ignore any space characters, defined by the syntactic_rule_skip rule, leading or trailing the terms that 
+  // make up the rule body
+  syntactic_rule_skip
+    = "\u0000".." "
+
+  comment
+    = "//" (~"\n" any)* "\n"  -- singleLine
+    | "/*" (~"*/" any)* "*/"  -- multiLine
+
+  tokens = token*
+
+  token = caseName | comment | ident | operator | punctuation | terminal | any
+
+  operator = "=" | "*" | "+" | "?" | "~" | "&"
+
+  punctuation = "<" | ">" | "," | "--"
+}

@@ -11,9 +11,13 @@ module Arborist
       # https://github.com/harc/ohm/blob/master/doc/syntax-reference.md#built-in-rules
       # https://github.com/harc/ohm/blob/master/src/built-in-rules.ohm
 
-      Grammar = star(apply("Rule"))
+      # Grammar
+      #   = ident "{" Rule* "}"
+      #   | Rule*
+      Grammar = seq(apply("ident"), term("{"), star(apply("Rule")), term("}"))
 
-      Rule = seq(apply("ident"), opt(apply("ruleDescr")), term("="), apply("RuleBody")).label("define")
+      # Rule = ident "=" RuleBody
+      Rule = seq(apply("ident"), term("="), apply("RuleBody")).label("define")
 
       RuleBody = seq(opt(term("|")), apply("TopLevelTerm"), star(seq(term("|"), apply("TopLevelTerm"))))
 
@@ -32,8 +36,16 @@ module Arborist
       )
 
       Pred = choice(
-        seq(term("~"), apply("Base")).label("not"),
-        seq(term("&"), apply("Base")).label("lookahead"),
+        seq(term("~"), apply("Lex")).label("not"),
+        seq(term("&"), apply("Lex")).label("lookahead"),
+        apply("Lex"),
+      )
+
+      # Lex
+      #   = "#" Base  -- lex
+      #   | Base
+      Lex = choice(
+        seq(term("#"), apply("Base")).label("lex"),
         apply("Base"),
       )
 
@@ -98,9 +110,12 @@ module Arborist
         apply("comment")
       )
 
+      # comment
+      #   = "//" (~"\n" any)* "\n"  -- singleLine
+      #   | "/*" (~"*/" any)* "*/"  -- multiLine
       Comment = choice(
         seq(term("//"), star(seq(neg(term("\n")), dot)), term("\n")).label("singleLine"),
-        seq(term("/*"), star(seq(neg(term("*/")), dot)), term("*/")).label("multiLine"),
+        seq(term("/*"), star(seq(neg(term("*/")), dot)), term("*/")).label("multiLine")
       )
 
       Tokens = star(apply("token"))
@@ -139,6 +154,7 @@ module Arborist
                           .add_rule("Seq", Seq)
                           .add_rule("Iter", Iter)
                           .add_rule("Pred", Pred)
+                          .add_rule("Lex", Lex)
                           .add_rule("Base", Base)
                           .add_rule("ruleDescr", RuleDescr)
                           .add_rule("ruleDescrText", RuleDescrText)
