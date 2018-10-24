@@ -14,46 +14,57 @@ module Arborist
       # Grammar
       #   = ident "{" Rule* "}"
       #   | Rule*
-      Grammar = seq(apply("ident"), term("{"), star(apply("Rule")), term("}"))
+      Grammar = choice(
+        seq(apply("ident"), term("{"), star(apply("Rule")), term("}")),
+        star(apply("Rule"))
+      )
 
       # Rule = ident "=" RuleBody
       Rule = seq(apply("ident"), term("="), apply("RuleBody")).label("define")
 
       RuleBody = seq(opt(term("|")), apply("TopLevelTerm"), star(seq(term("|"), apply("TopLevelTerm"))))
 
-      TopLevelTerm = choice(seq(apply("Seq"), apply("caseName")).label("inline"),
-                            apply("Seq"))
+      TopLevelTerm = choice(
+        seq(apply("Seq"), apply("caseName")).label("inline"),
+        apply("Seq").label("seq")
+      )
 
       Alt = seq(apply("Seq"), star(seq(term("|"), apply("Seq"))))
 
-      Seq = star(apply("Iter"))
-
-      Iter = choice(
-        seq(apply("Pred"), term("*")).label("star"),
-        seq(apply("Pred"), term("+")).label("plus"),
-        seq(apply("Pred"), term("?")).label("opt"),
-        apply("Pred")
-      )
+      Seq = star(apply("Pred"))
 
       Pred = choice(
-        seq(term("~"), apply("Lex")).label("not"),
-        seq(term("&"), apply("Lex")).label("lookahead"),
-        apply("Lex"),
+        seq(term("~"), apply("Iter")).label("neg"),
+        seq(term("&"), apply("Iter")).label("pos"),
+        apply("Iter").label("iter"),
       )
 
-      # Lex
-      #   = "#" Base  -- lex
-      #   | Base
-      Lex = choice(
-        seq(term("#"), apply("Base")).label("lex"),
-        apply("Base"),
+      Iter = choice(
+        seq(apply("Label"), term("*")).label("star"),
+        seq(apply("Label"), term("+")).label("plus"),
+        seq(apply("Label"), term("?")).label("opt"),
+        apply("Label").label("label")
       )
+
+      Label = choice(
+        seq(apply("ident"), term("="), apply("Base")).label("label"),
+        apply("Base").label("base")
+      )
+
+      # # Lex
+      # #   = "#" Base  -- lex
+      # #   | Base
+      # Lex = choice(
+      #   seq(term("#"), apply("Base")).label("lex"),
+      #   apply("Base"),
+      # )
 
       Base = choice(
         seq(apply("ident"), neg(seq(opt(apply("ruleDescr")), term("=")))).label("application"),
         seq(apply("oneCharTerminal"), term(".."), apply("oneCharTerminal")).label("range"),
         apply("terminal").label("terminal"),
-        seq(term("("), apply("Alt"), term(")")).label("paren")
+        seq(term("("), apply("Alt"), term(")")).label("group"),
+        term(".").label("dot")
       )
 
       RuleDescr = seq(term("("), apply("ruleDescrText"), term(")"))
@@ -105,6 +116,12 @@ module Arborist
         seq(term("\\x"), apply("hexDigit"), apply("hexDigit")).label("hexEscape"),
       )
 
+      # The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will skip/ignore any number of
+      # matches of the `skip` rule occurring immediately prior to or immediately following any of the terms that make up the rule body.
+      # In other words, the rule `Foo = "bar" "baz"` would match on the string "  \n\tbar      \t\t\n\n    baz \t\n "", and the
+      # whitespace in between the terms would be ignored.
+      Skip = star(apply("space"))
+      
       Space = choice(
         range('\u0000'..' '),
         apply("comment")
@@ -152,9 +169,10 @@ module Arborist
                           .add_rule("TopLevelTerm", TopLevelTerm)
                           .add_rule("Alt", Alt)
                           .add_rule("Seq", Seq)
-                          .add_rule("Iter", Iter)
                           .add_rule("Pred", Pred)
-                          .add_rule("Lex", Lex)
+                          .add_rule("Iter", Iter)
+                          .add_rule("Label", Label)
+                          # .add_rule("Lex", Lex)
                           .add_rule("Base", Base)
                           .add_rule("ruleDescr", RuleDescr)
                           .add_rule("ruleDescrText", RuleDescrText)
@@ -167,6 +185,7 @@ module Arborist
                           .add_rule("oneCharTerminal", OneCharTerminal)
                           .add_rule("terminalChar", TerminalChar)
                           .add_rule("escapeChar", EscapeChar)
+                          .add_rule("skip", Skip)
                           .add_rule("space", Space)
                           .add_rule("comment", Comment)
                           .add_rule("tokens", Tokens)
@@ -175,16 +194,15 @@ module Arborist
                           .add_rule("punctuation", Punctuation)
     end
 
-    GrammarVisitor = Visitor(String).new
+    GrammarVisitor = Visitor(Array(Rule) | ParseTree).new
       
-    # GrammarVisitor.on("e") do |alt_node|
-    #   case alt_node.label
-    #   when "subtract"
-    #   when "add"
-    #   when ""
-    #   end
-    # end
-
+    GrammarVisitor.on("e") do |alt_node|
+      case alt_node.label
+      when "subtract"
+      when "add"
+      when ""
+      end
+    end
 
 
     @matcher : Matcher?

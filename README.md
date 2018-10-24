@@ -166,10 +166,11 @@ Arithmetic {
   digit
     = "0".."9"
 
-  # The `syntactic_rule_skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter)
-  # will skip/ignore any space characters, defined by the syntactic_rule_skip rule, leading or trailing the terms that 
-  # make up the rule body
-  syntactic_rule_skip
+  // The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will skip/ignore any number of
+  // matches of the `skip` rule occurring immediately prior to or immediately following any of the terms that make up the rule body.
+  // In other words, the rule `Foo = "bar" "baz"` would match on the string "  \n\tbar      \t\t\n\n    baz \t\n "", and the
+  // whitespace in between the terms would be ignored.
+  skip
     = "\u0000".." "
 }
 ```

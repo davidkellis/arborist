@@ -334,12 +334,9 @@ describe Arborist do
       eval = Visitor(Int32).new
       
       eval.on("e_subtract") do |ctx|
-        # ctx.get("e1").visit - ctx.e2.visit
-        # eval.visit(ctx.capture("e1")) - ctx.capture("e2").visit(eval)
         ctx.capture("e1").visit(eval) - ctx.capture("e2").visit(eval)
       end
       eval.on("e_add") do |ctx|
-        # ctx.all("exprs").map(&.visit)
         ctx.captures("exprs").map(&.visit(eval)).sum
       end
       eval.on("e_num") do |ctx|
