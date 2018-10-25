@@ -6,8 +6,8 @@
 
 Arborist {
   Grammar
-    = ident "{" Rule* "}"
-    | Rule*
+    = ident "{" Rule* "}"   -- named
+    | Rule*                 -- unnamed
   
   Rule
     = ident "=" RuleBody
@@ -15,6 +15,7 @@ Arborist {
   RuleBody
     = "|"? TopLevelTerm ("|" TopLevelTerm)*
 
+  // rename this to TopLevelAlt
   TopLevelTerm
     = Seq caseName  -- inline
     | Seq           -- seq
@@ -51,6 +52,7 @@ Arborist {
     | "(" Alt ")"                               -- group
     | "."                                       -- dot
 
+  // rename this to altName
   caseName
     = "--" (~"\n" space)* name (~"\n" space)* ("\n" | &"}")
 
@@ -75,10 +77,11 @@ Arborist {
     = "\"" terminalChar "\""
 
   terminalChar
-    = escapeChar
-    | ~"\\" ~"\"" ~"\n" any
+    = escapeChar            -- escape
+    | ~"\\" ~"\"" ~"\n" char=.   -- char
 
-  escapeChar  (an escape sequence)
+  // an escape sequence
+  escapeChar
     = "\\\\"                                     -- backslash
     | "\\\""                                     -- doubleQuote
     | "\\\'"                                     -- singleQuote
@@ -101,14 +104,16 @@ Arborist {
     = "\u0000".." "
 
   comment
-    = "//" (~"\n" any)* "\n"  -- singleLine
-    | "/*" (~"*/" any)* "*/"  -- multiLine
+    = "//" (~"\n" .)* "\n"  -- singleLine
+    | "/*" (~"*/" .)* "*/"  -- multiLine
 
   tokens = token*
 
-  token = caseName | comment | ident | operator | punctuation | terminal | any
+  token = caseName | comment | ident | operator | punctuation | terminal | .
 
   operator = "=" | "*" | "+" | "?" | "~" | "&"
 
   punctuation = "<" | ">" | "," | "--"
+
+  hexDigit = "0".."9" | "A".."F" | "a".."f"
 }

@@ -131,7 +131,7 @@ module Arborist
     end
 
     # returns nil if the grammar rules don't match the full input string
-    def match(input, start_rule_name = "start") : ParseTree?
+    def match(input, start_rule_name = (@rules.first_key? || "start")) : ParseTree?
       @input = input
       
       prepare_for_matching    # (re)initialize the growing map and limit set just prior to use
