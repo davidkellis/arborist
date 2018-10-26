@@ -214,6 +214,24 @@ describe Arborist do
       # 1-2-3 should parse as (1-2(-3))
       m1.match("1-2-3", "e").try(&.syntax_tree).should eq [["1"], "-", ["2"], ["-", ["3"]]]
     end
+
+    pending "never matches any phrase for the rule: a = ~a 'b' ; see https://github.com/harc/ohm/issues/120" do
+      # a -> ~a "b"
+      # This rule is paradoxical - a is defined to recognize a string that is not prefixed with itself, therefore, it can't
+      # recognize any string; however, if a can't recognize anything, then by failing to recognize anything, `~e` succeeds,
+      # which then allows `a` to match the "b" terminal when the input string is "b". But then if a can recognize "b", 
+      # then `~a` should prevent `a` from matching the "b" terminal, resulting in `a` not being able to recognize anything.
+      # So, which is it?
+      # My gut feeling is that it should not match anything.
+
+      a = seq(neg(apply("a")), term("b"))
+      m1 = Matcher.new.add_rule("a", a)
+
+      m1.match("").should be_nil
+      m1.match("b").try(&.syntax_tree).should be_nil
+      m1.match("bb").try(&.syntax_tree).should be_nil
+      m1.match("a").try(&.syntax_tree).should be_nil
+    end
   end
 
   describe "parse tree" do
