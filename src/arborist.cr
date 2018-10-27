@@ -17,7 +17,6 @@
 # from nonterminals to expressions, and we write R(A) to denote the
 # unique expression e such that (A <- e) ∈ R.
 
-require "./dsl"
 require "./parse_tree"
 require "./visitor"
 
@@ -61,6 +60,8 @@ module Arborist
   end
 
   class TerminalCall < ExprCall
+  end
+  class MutexAltCall < ExprCall
   end
   class ChoiceCall < ExprCall
   end
@@ -266,7 +267,7 @@ module Arborist
       @pos >= @input.size
     end
 
-    def consume(c) : Bool
+    def consume(c : Char) : Bool
       if @input[@pos] == c
         @pos += 1
         true
@@ -274,10 +275,25 @@ module Arborist
         false
       end
     end
+
+    # consumes a string of length `count`
+    # returns nil if unable to consume `count` characters
+    def consume(count : Int32) : String?
+      remaining_chars_in_input = @input.size - @pos
+      return nil if count > remaining_chars_in_input
+      
+      str = @input[@pos, count]
+      @pos += count
+      str
+    end
+
+    def skip_whitespace_if_in_syntactic_context
+      # todo, implement this
+    end
   end
 
 
-  alias Expr = Apply | Terminal | Choice | Sequence | NegLookAhead | PosLookAhead | Optional | Repetition | RepetitionOnePlus
+  alias Expr = Apply | Terminal | MutexAlt | Choice | Sequence | NegLookAhead | PosLookAhead | Optional | Repetition | RepetitionOnePlus
 
   # Apply represents the application of a named rule
   class Apply
@@ -291,6 +307,11 @@ module Arborist
     def label(label : String) : Apply
       @label = label
       self
+    end
+
+    def syntactic_rule?
+      first_char = @rule_name[0]?
+      first_char.try(&.uppercase?)
     end
 
     # this implements Tratt's Algorithm 2 in section 6.4 of https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
@@ -318,6 +339,8 @@ module Arborist
       is_rule_in_left_recursion_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
 
       current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
+
+      matcher.skip_whitespace_if_in_syntactic_context
 
       retval = if is_rule_in_left_recursion_at_current_position             # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
         seed_parse_tree = matcher.growing[rule][pos]
@@ -499,6 +522,8 @@ module Arborist
 
       matcher.push_onto_call_stack(TerminalCall.new(self, matcher.pos))
 
+      matcher.skip_whitespace_if_in_syntactic_context
+
       orig_pos = matcher.pos
       terminal_matches = @str.each_char.all? do |c|
         if matcher.eof?
@@ -520,7 +545,56 @@ module Arborist
     end
   end
 
+  # Mutually exclusive terminal alternation
+  # A terminal expression, like `Terminal`, that captures a set of mutually exclusive equal-length strings.
+  # If this is ever extended to strings of different length, then none of the strings in the set may be a 
+  # substring of another string in the set.
+  # The range operator can be implemented in terms of this expression.
+  # e.g. "a" | "b" | "c"
+  # e.g. "abc" | "def" | "xyz"
+  class MutexAlt
+    getter strings : Set(String)    # all strings in the set have the same length
+    property label : String?
+
+    def initialize(@strings)
+      raise "All the alternatives of a MutexAlt must be the same length. String lengths: #{@strings.map(&.size).group_by(&.itself).map{|k,v| [k,v.size] }.to_h}" unless @strings.map(&.size).uniq.size == 1
+    end
+
+    def label(label : String) : MutexAlt
+      @label = label
+      self
+    end
+
+    # returns String | Nil
+    def eval(matcher) : ParseTree?
+      return nil if matcher.fail_all_rules? || @strings.empty?
+
+      matcher.push_onto_call_stack(MutexAltCall.new(self, matcher.pos))
+
+      matcher.skip_whitespace_if_in_syntactic_context
+
+      string_length = @strings.first.size
+
+      orig_pos = matcher.pos
+      consumed_string = matcher.consume(string_length)
+      parse_tree = if consumed_string && @strings.includes?(consumed_string)
+        MutexAltTree.new(consumed_string, matcher.input, orig_pos, matcher.pos - 1).label(@label)
+      else
+        matcher.pos = orig_pos
+        nil
+      end
+
+      matcher.pop_off_of_call_stack
+      parse_tree
+    end
+
+    def to_s
+      "alt(\"#{@strings.join("|")}\")"
+    end
+  end
+
   # Ordered choice
+  # e.g. "foo bar baz" / "foo bar" / "foo"
   class Choice
     @exps : Array(Expr)
     property label : String?

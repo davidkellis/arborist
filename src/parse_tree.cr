@@ -275,6 +275,36 @@ module Arborist
     end
   end
 
+  class MutexAltTree < ParseTree
+    property str : String
+    
+    def initialize(@str, @input, @start_pos, @finishing_pos)
+    end
+    
+    def label(label : String?) : MutexAltTree
+      @label = label
+      self
+    end
+
+    def syntax_tree : SyntaxTree
+      @str
+    end
+
+    # query methods
+
+    def terminal?
+      true
+    end
+
+    def children : Array(ParseTree)
+      [] of ParseTree
+    end
+
+    def terms : Array(ParseTree)
+      [] of ParseTree
+    end
+  end
+
   class NegLookAheadTree < ParseTree
     property succeed : Bool
 

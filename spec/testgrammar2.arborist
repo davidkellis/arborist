@@ -1,7 +1,7 @@
 Test {
   Start
     = foo? bar* baz+
-    | qux
+    / qux
   foo = "foo"
   bar = "bar"
   baz = "baz"

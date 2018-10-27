@@ -1,17 +1,20 @@
 require "option_parser"
 
-require "./arborist"
 require "./grammar"
 
 def run(grammar_file_path, input_file_path)
-  grammar = Grammar.new(grammar_file)
-  parse_tree = grammar.parse_file(input_file)
+  grammar = Arborist::Grammar.new(grammar_file_path)
+  parse_tree = grammar.parse_file(input_file_path)
   if parse_tree
-    puts parse_tree.to_msgpack
+    puts "success"
+    # puts parse_tree.to_msgpack
   else
     STDERR.puts "Failed parsing."
     exit(1)
   end
+rescue e
+  STDERR.puts "Failed to parse: #{e.message}"
+  exit(1)
 end
 
 def main
@@ -39,7 +42,7 @@ def main
   (STDERR.puts("Input file must be specified") ; exit(1)) unless input_file
   (STDERR.puts("Input file \"#{input_file}\" does not exist") ; exit(1)) unless File.exists?(input_file.as(String))
 
-  run(grammar_file, input_file)
+  run(grammar_file.as(String), input_file.as(String))
 end
 
 main

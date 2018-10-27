@@ -11,6 +11,29 @@ module Arborist
       Terminal.new(string)
     end
 
+    def alt(*alternatives : String | Expr) : Expr
+      alt(alternatives.to_a)
+    end
+
+    def alt(alts : Array(String | Expr)) : Expr
+      strings = Set(String).new
+      alts.map do |alt|
+        case alt
+        when MutexAlt
+          strings |= alt.strings
+        when String
+          strings << alt
+        else
+          raise "#{alt.inspect} cannot be an alternative. Alternatives must consist only of String and MutexAlt objects."
+        end
+      end
+      MutexAlt.new(strings)
+    end
+
+    def alt(strings : Array(String)) : Expr
+      MutexAlt.new(strings.to_set)
+    end
+
     def choice(*alternatives) : Expr
       choice(alternatives.map(&.as(Expr)).to_a)
     end
@@ -19,18 +42,24 @@ module Arborist
       Choice.new(alternatives)
     end
 
+    def skip : Expr
+      star(apply("skip")).label("__skip__")
+    end
+
     def apply(rule_name : String) : Expr
       Apply.new(rule_name)
     end
 
     def range(chars : Range(Char, Char)) : Expr
-      terms = chars.map {|char| term(char.to_s).as(Expr) }
-      choice(terms)
+      # terms = chars.map {|char| term(char.to_s).as(Expr) }
+      # choice(terms)
+      alt(chars.map(&.to_s))
     end
 
     def dot(alphabet = ALPHABET) : Expr
-      terms = alphabet.map {|char| term(char.to_s).as(Expr) }
-      choice(terms)
+      # terms = alphabet.map {|char| term(char.to_s).as(Expr) }
+      # choice(terms)
+      alt(alphabet.map(&.to_s))
     end
 
     def seq(*exprs) : Expr

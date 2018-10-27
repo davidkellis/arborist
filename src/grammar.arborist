@@ -7,65 +7,65 @@
 Arborist {
   Grammar
     = ident "{" Rule* "}"   -- named
-    | Rule*                 -- unnamed
+    / Rule*                 -- unnamed
   
   Rule
     = ident "=" RuleBody
 
   RuleBody
-    = "|"? TopLevelTerm ("|" TopLevelTerm)*
+    = "/"? TopLevelTerm ("/" TopLevelTerm)*
 
   // rename this to TopLevelAlt
   TopLevelTerm
     = Seq caseName  -- inline
-    | Seq           -- seq
+    / Seq           -- seq
 
   Alt
-    = Seq ("|" Seq)*
+    = Seq ("/" Seq)*
 
   Seq
     = Pred*
 
   Pred
     = "~" Iter  -- neg
-    | "&" Iter  -- pos
-    | Iter      -- iter
+    / "&" Iter  -- pos
+    / Iter      -- iter
   
   Iter
     = Label "*"  -- star
-    | Label "+"  -- plus
-    | Label "?"  -- opt
-    | Label      -- label
+    / Label "+"  -- plus
+    / Label "?"  -- opt
+    / Label      -- label
 
   Label
     = ident "=" Base  -- label
-    | Base            -- base
+    / Base            -- base
 
 //  Lex
 //    = "#" Base  -- lex
-//    | Base
+//    / Base
 
   Base
     = ident ~("=")                              -- application
-    | oneCharTerminal ".." oneCharTerminal      -- range
-    | terminal                                  -- terminal
-    | "(" Alt ")"                               -- group
-    | "."                                       -- dot
+    / oneCharTerminal ".." oneCharTerminal      -- range
+    / terminal                                  -- terminal
+    / "(" Alt ")"                               -- group
+    / "."                                       -- dot
 
   // rename this to altName
   caseName
-    = "--" (~"\n" space)* name (~"\n" space)* ("\n" | &"}")
+    = "--" (~"\n" space)* name (~"\n" space)* ("\n" / &"}")
 
   name
     = nameFirst nameRest*
 
   nameFirst
     = "_"
-    | letter
+    / letter
 
   nameRest
     = "_"
-    | alnum
+    / alnum
 
   ident
     = name
@@ -78,24 +78,24 @@ Arborist {
 
   terminalChar
     = escapeChar            -- escape
-    | ~"\\" ~"\"" ~"\n" char=.   -- char
+    / ~"\\" ~"\"" ~"\n" char=.   -- char
 
   // an escape sequence
   escapeChar
     = "\\\\"                                     -- backslash
-    | "\\\""                                     -- doubleQuote
-    | "\\\'"                                     -- singleQuote
-    | "\\b"                                      -- backspace
-    | "\\n"                                      -- lineFeed
-    | "\\r"                                      -- carriageReturn
-    | "\\t"                                      -- tab
-    | "\\u{" hexDigit+ }                         -- unicodeEscapeLong
-    | "\\u" hexDigit hexDigit hexDigit hexDigit  -- unicodeEscape
-    | "\\x" hexDigit hexDigit                    -- hexEscape
+    / "\\\""                                     -- doubleQuote
+    / "\\\'"                                     -- singleQuote
+    / "\\b"                                      -- backspace
+    / "\\n"                                      -- lineFeed
+    / "\\r"                                      -- carriageReturn
+    / "\\t"                                      -- tab
+    / "\\u{" hexDigit+ }                         -- unicodeEscapeLong
+    / "\\u" hexDigit hexDigit hexDigit hexDigit  -- unicodeEscape
+    / "\\x" hexDigit hexDigit                    -- hexEscape
 
   space
     = "\u0000".." "
-    | comment
+    / comment
 
   // The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will skip/ignore any number of
   // matches of the `skip` rule occurring immediately prior to or immediately following any of the terms that make up the rule body.
@@ -106,19 +106,11 @@ Arborist {
 
   comment
     = "//" (~"\n" .)* "\n"  -- singleLine
-    | "/*" (~"*/" .)* "*/"  -- multiLine
-
-  tokens = token*
-
-  token = caseName | comment | ident | operator | punctuation | terminal | .
-
-  operator = "=" | "*" | "+" | "?" | "~" | "&"
-
-  punctuation = "<" | ">" | "," | "--"
+    / "/*" (~"*/" .)* "*/"  -- multiLine
 
   alnum  (an alpha-numeric character)
     = letter
-    | digit
+    / digit
 
   letter
     = unicode_letter

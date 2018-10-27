@@ -14,6 +14,19 @@ describe Arborist do
     end
   end
 
+  describe "mutex alternation operator" do
+    it "matches any string in the set" do
+      a = alt("a", "b", "c")
+      m = Matcher.new.add_rule("a", a)
+
+      m.match("").try(&.syntax_tree).should be_nil
+      m.match("a").try(&.syntax_tree).should eq("a")
+      m.match("b").try(&.syntax_tree).should eq("b")
+      m.match("c").try(&.syntax_tree).should eq("c")
+      m.match("d").try(&.syntax_tree).should be_nil
+    end
+  end
+
   describe "choice" do
     it "parses one or the other string" do
       t1 = term("abc")

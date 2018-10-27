@@ -33,8 +33,8 @@ include Arborist::DSL
 # build the parser
 
 # e = e1=e - e2=e -- subtract
-#   | exprs+=e ("+" exprs+=e)* -- add
-#   | num         -- num
+#   / exprs+=e ("+" exprs+=e)* -- add
+#   / num         -- num
 # num = [0-9]+
 e = choice(
   seq(apply("e").label("e1"), term("-"), apply("e").label("e2")).label("subtract"), 
@@ -93,7 +93,7 @@ evaluated value:
 
 ```bash
 $ cat mygrammar.g
-E = E - E | E + E | Num
+E = E - E / E + E / Num
 Num = ("0".."9")+
 
 $ cat input_document.txt
@@ -113,11 +113,27 @@ A grammar may consist of the following parsing expressions:
 - Ordered choice
 - Sequence
 - Terminal
+- Mutually Exclusive Alternation
 - Positive look-ahead / And predicate
 - Negative look-ahead / Not predicate
 - Optional
 - Zero-or-more repetition
 - One-or-more repetition
+
+Arborist supports [Ohm's](https://github.com/harc/ohm/blob/master/doc/syntax-reference.md#syntactic-vs-lexical-rules) 
+distinction between syntactic and lexical rules.
+
+Syntactic rules have rule names that start with an uppercase letter.
+Lexical rules have rule names that start with a lowercase letter.
+
+Syntactic rules implicitly consumes and ignores whitespace - defined by the special `skip` rule - that occurs between the
+terms in the rule definition. ~~It is assumed that terms will be separated by at least some whitespace.~~ Syntactic rules do
+**not** consume whitespace occurring before or after the application of the syntactic rule.
+
+Lexical rules do not implicitly consume whitespace. Lexical rules are just standard PEG parser rules. If you need to treat
+whitespace as a significant feature in a grammar rule, then you should define the grammar rule as a lexical rule, and not
+a syntactic rule.
+
 
 ### Grammar Sample
 
@@ -128,24 +144,24 @@ Arithmetic {
 
   Add
     = Add "+" Add  -- plus
-    | Add "-" Add  -- minus
-    | Mult
+    / Add "-" Add  -- minus
+    / Mult
 
   Mult
     = Mult "*" Mult  -- times
-    | Mult "/" Mult  -- divide
-    | Exp
+    / Mult "/" Mult  -- divide
+    / Exp
 
   Exp
     = Primary "^" Exp  -- power
-    | Primary
+    / Primary
 
   Primary
     = "(" Expr ")"  -- paren
-    | "+" Primary   -- pos
-    | "-" Primary   -- neg
-    | ident
-    | number
+    / "+" Primary   -- pos
+    / "-" Primary   -- neg
+    / ident
+    / number
 
   # identifier
   ident
@@ -153,7 +169,7 @@ Arithmetic {
 
   number
     = digit* "." digit+  -- decimal
-    | digit+             -- int
+    / digit+             -- int
 
   alnum
     = letter
@@ -194,8 +210,8 @@ If any of the top-level alternatives are labeled, then they must all be labeled.
 
 ```
 foo = bar ("bar"? bar)+ -- label1
-    | baz "123"? -- label2
-    | qux -- label3
+    / baz "123"? -- label2
+    / qux -- label3
 ```
 
 #### Rule applications
@@ -231,7 +247,7 @@ foo = bar l1=("->" bas)?
 When multiple terms are labeled with the same label, any resulting match of those terms is grouped together to form a capture sequence.
 
 ```
-list = items+=item ("," items+=item)* (";" items+=item)? items+=(foo | bar | baz)
+list = items+=item ("," items+=item)* (";" items+=item)? items+=(foo / bar / baz)
 ```
 
 ## Implementation Notes
@@ -245,6 +261,15 @@ Tratt's Algorithm 2 is subject to the following recursion rules:
    Potentially left-recursive rules may not have potential right-recursion. (Section 6.1, last paragraph.)
    Left-resursive rules may not have potential right-recursion. (Section 6.3, second to last paragraph.)
 
-I don't understand the distinctions that Tratt makes in his definitions of potential left recursion, definite left recursion, left recursion, potential right recursion, definite right recursion, and right recursion well enough to fully understand the implication of those rules. Additionally, while trying to implement Algorithm 2, as stated, I encountered multiple issues with the resulting parse trees and the general runtime behavior of the parser. I didn't document each error, rather, I wound up tracing through the execution of the algorithm, documenting my findings of desirable behavior in the source code, and implementing the desired behavior.
+I don't understand the distinctions that Tratt makes in his definitions of potential left recursion, definite left recursion, 
+left recursion, potential right recursion, definite right recursion, and right recursion well enough to fully understand the 
+implication of those rules. Additionally, while trying to implement Algorithm 2, as stated, I encountered multiple issues 
+with the resulting parse trees and the general runtime behavior of the parser. I didn't document each error, rather, I 
+wound up tracing through the execution of the algorithm, documenting my findings of desirable behavior in the source code, 
+and implementing the desired behavior.
 
-In the end, I wound up modifying Algorithm 2 because I couldn't make Algorithm 2, as written, work. I believe Algorithm 2 is incorrect in at least one key place, with the implication being that it's effectively broken, as stated in the paper. Therefore, I have attempted to generalize Tratt's approach such that it can handle direct and indirect left and right recursion. I believe my implementation does that. If you run into any unexpected behavior, please open an issue in Github and I will try to either clarify things or fix anything that's broken.
+In the end, I wound up modifying Algorithm 2 because I couldn't make Algorithm 2, as written, work. I believe Algorithm 2 
+is incorrect in at least one key place, with the implication being that it's effectively broken, as stated in the paper. 
+Therefore, I have attempted to generalize Tratt's approach such that it can handle direct and indirect left and right 
+recursion. I believe my implementation does that. If you run into any unexpected behavior, please open an issue in Github 
+and I will try to either clarify things or fix anything that's broken.
