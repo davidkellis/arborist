@@ -10,6 +10,13 @@ Features
 - May be used as a PEG parser combinator library
 - May be used as a command line parser that produces a parse tree for a given input document
 
+When used as a Crystal library, Arborist can be used to parse input documents that conform to a grammar, and can also be used
+to define and execute semantic actions for a grammar.
+
+When used as a command line tool, Arborist can take a grammar file and parse an input document to produce a parse tree that may then
+be written to a file or piped to another tool for further processing/manipulation. The parse tree processing tool may be written
+in any lanugage so long as it can read the parse tree format (documentation for the parse tree format is coming soon) that Arborist writes out.
+
 
 ## Usage
 
