@@ -72,7 +72,7 @@ module Arborist
 
       Base = choice(
         seq(apply("ident"), neg(term("<-")), neg(term("="))).label("application"),
-        seq(apply("oneCharTerminal"), term(".."), apply("oneCharTerminal")).label("range"),
+        seq(apply("oneCharTerminal").label("start_char"), term(".."), apply("oneCharTerminal").label("end_char")).label("range"),
         apply("terminal").label("terminal"),
         seq(term("("), apply("Alt"), term(")")).label("group"),
         term(".").label("dot")
@@ -196,10 +196,6 @@ module Arborist
         .add_rule("skip", Skip)
         .add_rule("space", Space)
         .add_rule("comment", Comment)
-        # .add_rule("tokens", Tokens)
-        # .add_rule("token", Token)
-        # .add_rule("operator", Operator)
-        # .add_rule("punctuation", Punctuation)
         .add_rule("alnum", Alnum)
         .add_rule("letter", Letter)
         .add_rule("digit", Digit)
