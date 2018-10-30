@@ -42,6 +42,10 @@ module Arborist
       children.each(&.recursively_populate_parents(self))
       self
     end
+
+    def s_exp(indent : Int32 = 0) : String
+      raise "ParseTree#s_exp is an abstract method"
+    end
     
     # the following query methods are useful for exploring and querying the parse tree
 
@@ -175,6 +179,11 @@ module Arborist
       tree.syntax_tree
     end
 
+    def s_exp(indent : Int32 = 0) : String
+      prefix = " " * indent
+      "#{prefix}(apply #{rule_name}\n#{tree.s_exp(indent+2)})"
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -203,6 +212,11 @@ module Arborist
 
     def syntax_tree : SyntaxTree
       tree.syntax_tree
+    end
+
+    def s_exp(indent : Int32 = 0) : String
+      prefix = " " * indent
+      "#{prefix}(choice\n#{tree.s_exp(indent+2)})"
     end
 
     # query methods
@@ -234,6 +248,11 @@ module Arborist
       nodes
     end
 
+    def s_exp(indent : Int32 = 0) : String
+      prefix = " " * indent
+      "#{prefix}(seq\n#{seq.map(&.s_exp(indent+2)).join("\n")})"
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -258,6 +277,11 @@ module Arborist
 
     def syntax_tree : SyntaxTree
       @str
+    end
+
+    def s_exp(indent : Int32 = 0) : String
+      prefix = " " * indent
+      "#{prefix}\"#{@str}\""
     end
 
     # query methods
@@ -288,6 +312,11 @@ module Arborist
 
     def syntax_tree : SyntaxTree
       @str
+    end
+
+    def s_exp(indent : Int32 = 0) : String
+      prefix = " " * indent
+      "#{prefix}\"#{@str}\""
     end
 
     # query methods
@@ -321,6 +350,10 @@ module Arborist
       raise "NegLookAheadTree#syntax_tree undefined"
     end
 
+    def s_exp(indent : Int32 = 0) : String
+      raise "NegLookAheadTree#s_exp undefined"
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -348,6 +381,10 @@ module Arborist
       raise "PosLookAhead#syntax_tree undefined"
     end
 
+    def s_exp(indent : Int32 = 0) : String
+      raise "PosLookAheadTree#s_exp undefined"
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -372,6 +409,16 @@ module Arborist
 
     def syntax_tree : SyntaxTree
       @tree.try(&.syntax_tree)
+    end
+
+    def s_exp(indent : Int32 = 0) : String
+      tree = @tree
+      if tree
+        prefix = " " * indent
+        "#{prefix}(opt\n#{tree.s_exp(indent+2)})"
+      else
+        ""
+      end
     end
 
     # query methods
@@ -401,6 +448,11 @@ module Arborist
 
     def syntax_tree : SyntaxTree
       trees.map {|n| n.syntax_tree.as(SyntaxTree) }
+    end
+
+    def s_exp(indent : Int32 = 0) : String
+      prefix = " " * indent
+      "#{prefix}(repeat\n#{trees.map(&.s_exp(indent+2)).join("\n")})"
     end
 
     # query methods

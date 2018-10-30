@@ -51,10 +51,10 @@ def unicode_ranges(character_categories)
 end
 
 # Character class documentation is at http://www.unicode.org/reports/tr44/#General_Category_Values
-puts "unicode_digit = #{unicode_ranges(["Nd"])}"
-puts "unicode_upper = #{unicode_ranges(["Lu"])}"
-puts "unicode_lower = #{unicode_ranges(["Ll"])}"
-puts "unicode_titlecase = #{unicode_ranges(["Lt"])}"
-puts "unicode_modifier = #{unicode_ranges(["Lm"])}"
-puts "unicode_other_letter = #{unicode_ranges(["Lo"])}"
-puts "unicode_letter = unicode_upper | unicode_lower | unicode_titlecase | unicode_modifier | unicode_other_letter"
+puts "unicode_digit <- #{unicode_ranges(["Nd"])}"
+puts "unicode_upper <- #{unicode_ranges(["Lu"])}"
+puts "unicode_lower <- #{unicode_ranges(["Ll"])}"
+puts "unicode_titlecase <- #{unicode_ranges(["Lt"])}"
+puts "unicode_modifier <- #{unicode_ranges(["Lm"])}"
+puts "unicode_other_letter <- #{unicode_ranges(["Lo"])}"
+puts "unicode_letter <- unicode_upper | unicode_lower | unicode_titlecase | unicode_modifier | unicode_other_letter"

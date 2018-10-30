@@ -39,10 +39,10 @@ include Arborist::DSL
 
 # build the parser
 
-# e = e1=e - e2=e -- subtract
+# e <- e1=e - e2=e -- subtract
 #   / exprs+=e ("+" exprs+=e)* -- add
 #   / num         -- num
-# num = [0-9]+
+# num <- [0-9]+
 e = choice(
   seq(apply("e").label("e1"), term("-"), apply("e").label("e2")).label("subtract"), 
   seq(apply("e").label("exprs"), star(seq(term("+"), apply("e").label("exprs")))).label("add"), 
@@ -100,8 +100,8 @@ evaluated value:
 
 ```bash
 $ cat mygrammar.g
-E = E - E / E + E / Num
-Num = ("0".."9")+
+E <- E - E / E + E / Num
+Num <- ("0".."9")+
 
 $ cat input_document.txt
 1-2+3-4+5
@@ -147,24 +147,24 @@ a syntactic rule.
 ```
 Arithmetic {
   Expr
-    = Add
+    <- Add
 
   Add
-    = Add "+" Add  -- plus
+    <- Add "+" Add  -- plus
     / Add "-" Add  -- minus
     / Mult
 
   Mult
-    = Mult "*" Mult  -- times
+    <- Mult "*" Mult  -- times
     / Mult "/" Mult  -- divide
     / Exp
 
   Exp
-    = Primary "^" Exp  -- power
+    <- Primary "^" Exp  -- power
     / Primary
 
   Primary
-    = "(" Expr ")"  -- paren
+    <- "(" Expr ")"  -- paren
     / "+" Primary   -- pos
     / "-" Primary   -- neg
     / ident
@@ -172,29 +172,29 @@ Arithmetic {
 
   # identifier
   ident
-    = letter alnum*
+    <- letter alnum*
 
   number
-    = digit* "." digit+  -- decimal
+    <- digit* "." digit+  -- decimal
     / digit+             -- int
 
   alnum
-    = letter
+    <- letter
     | digit
 
   letter
-    = "a".."z"
+    <- "a".."z"
     | "A".."Z"
 
   digit
-    = "0".."9"
+    <- "0".."9"
 
   // The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will skip/ignore any number of
   // matches of the `skip` rule occurring immediately prior to or immediately following any of the terms that make up the rule body.
-  // In other words, the rule `Foo = "bar" "baz"` would match on the string "  \n\tbar      \t\t\n\n    baz \t\n "", and the
+  // In other words, the rule `Foo <- "bar" "baz"` would match on the string "  \n\tbar      \t\t\n\n    baz \t\n "", and the
   // whitespace in between the terms would be ignored.
   skip
-    = "\u0000".." "
+    <- "\u0000".." "
 }
 ```
 
@@ -216,7 +216,7 @@ Labels may be attached to each of a rule's top-level alternatives.
 If any of the top-level alternatives are labeled, then they must all be labeled.
 
 ```
-foo = bar ("bar"? bar)+ -- label1
+foo <- bar ("bar"? bar)+ -- label1
     / baz "123"? -- label2
     / qux -- label3
 ```
@@ -226,7 +226,7 @@ foo = bar ("bar"? bar)+ -- label1
 Labels may be attached to any rule application.
 
 ```
-foo = l1=bar l2=baz (" " l3=qux)?
+foo <- l1=bar l2=baz (" " l3=qux)?
 ```
 
 #### Terminals
@@ -234,7 +234,7 @@ foo = l1=bar l2=baz (" " l3=qux)?
 Labels may be attached to terminals.
 
 ```
-foo = l1="bar" l2="baz" (" " l3="qux")?
+foo <- l1="bar" l2="baz" (" " l3="qux")?
 ```
 
 #### Optionals
@@ -242,11 +242,11 @@ foo = l1="bar" l2="baz" (" " l3="qux")?
 Labels may be attached to optional terms.
 
 ```
-foo = bar l1=bas?
+foo <- bar l1=bas?
 ```
 
 ```
-foo = bar l1=("->" bas)?
+foo <- bar l1=("->" bas)?
 ```
 
 #### Multiple terms with the same label
@@ -254,7 +254,7 @@ foo = bar l1=("->" bas)?
 When multiple terms are labeled with the same label, any resulting match of those terms is grouped together to form a capture sequence.
 
 ```
-list = items+=item ("," items+=item)* (";" items+=item)? items+=(foo / bar / baz)
+list <- items+=item ("," items+=item)* (";" items+=item)? items+=(foo / bar / baz)
 ```
 
 ## Implementation Notes

@@ -98,6 +98,10 @@ module Arborist
     def left_recursive?
       @left_recursive
     end
+
+    def syntactic_rule?
+      @expr.as(Apply).syntactic_rule?
+    end
   end
 
   class Matcher
@@ -158,6 +162,8 @@ module Arborist
 
       @pos = 0
 
+      add_skip_rule_if_necessary
+
       # the next 4 lines implement line 1 of Algorithm 2 from https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
       @growing = {} of Rule => Hash(Int32, ParseTree?)
       @rules.each_value do |rule|
@@ -167,6 +173,11 @@ module Arborist
       @expr_call_stack = [] of ExprCall
 
       @fail_all_rules_until_this_rule = nil
+    end
+
+    def add_skip_rule_if_necessary
+      skip_expr = (@skip_expr ||= Repetition.new(MutexAlt.new( ('\u0000'..' ').map(&.to_s).to_set )) )
+      add_rule("skip", skip_expr) unless @rules.has_key?("skip")
     end
 
     # returns the deepest/most-recent application of `rule` at position `pos` in the rule application stack
@@ -228,15 +239,12 @@ module Arborist
     end
 
     def push_onto_call_stack(expr_application : ExprCall)
-      # puts "push_onto_call_stack #{expr_application.inspect}"
       @expr_call_stack.push(expr_application)
       expr_application
     end
 
     def pop_off_of_call_stack() : ExprCall
-      retval = @expr_call_stack.pop
-      # puts "pop_off_of_call_stack -> #{retval.inspect}"
-      retval
+      @expr_call_stack.pop
     end
 
     def has_memoized_result?(rule_name) : Bool
@@ -287,8 +295,25 @@ module Arborist
       str
     end
 
+    def apply_skip_rule
+      apply_skip = (@apply_skip ||= Apply.new("skip") )
+      apply_skip.eval(self)
+    end
+
     def skip_whitespace_if_in_syntactic_context
-      # todo, implement this
+      rule_application = most_recent_rule_application
+      apply_skip_rule if rule_application && rule_application.syntactic_rule?
+    end
+
+    def most_recent_rule_application : ApplyCall?
+      i = @expr_call_stack.size - 1
+      while i >= 0
+        expr_application_i = @expr_call_stack[i]
+        i -= 1
+        next unless expr_application_i.is_a?(ApplyCall)
+        return expr_application_i
+      end
+      nil
     end
   end
 
@@ -321,6 +346,8 @@ module Arborist
       rule = matcher.get_rule(@rule_name)
       pos = matcher.pos
 
+      matcher.skip_whitespace_if_in_syntactic_context unless @rule_name == "skip"
+
       # has this same rule been applied at the same position previously?
       previous_application_of_rule_at_pos = matcher.lookup_rule_application_in_call_stack(rule, pos)
       # if previous_application_of_rule_at_pos != nil, then a previous application of rule `rule` was attempted at position `pos`, 
@@ -339,8 +366,6 @@ module Arborist
       is_rule_in_left_recursion_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
 
       current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
-
-      matcher.skip_whitespace_if_in_syntactic_context
 
       retval = if is_rule_in_left_recursion_at_current_position             # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
         seed_parse_tree = matcher.growing[rule][pos]

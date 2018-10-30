@@ -76,7 +76,7 @@ describe Arborist do
 
   describe "negative lookahead" do
     it "allows a subsequent rule to be matched so long as it doesn't match the predicate captured in the negative lookahead rule" do
-      r1 = seq(neg(term("abc")), seq(dot, dot, dot))   # ~"abc" /.../
+      r1 = seq(neg(term("abc")), seq(dot, dot, dot))   # !"abc" /.../
       m1 = Matcher.new.add_rule("start", r1)
 
       m1.match("abc").try(&.syntax_tree).should be_nil
@@ -84,7 +84,7 @@ describe Arborist do
     end
 
     it "can be stacked to ensure multiple things do not match" do
-      r1 = seq(neg(term("abc")), neg(term("xyz")), seq(dot, dot, dot))   # ~"abc" ~"xyz" /.../
+      r1 = seq(neg(term("abc")), neg(term("xyz")), seq(dot, dot, dot))   # !"abc" !"xyz" /.../
       m1 = Matcher.new.add_rule("start", r1)
 
       m1.match("abc").try(&.syntax_tree).should be_nil
@@ -228,12 +228,12 @@ describe Arborist do
       m1.match("1-2-3", "e").try(&.syntax_tree).should eq [["1"], "-", ["2"], ["-", ["3"]]]
     end
 
-    pending "never matches any phrase for the rule: a = ~a 'b' ; see https://github.com/harc/ohm/issues/120" do
-      # a -> ~a "b"
+    pending "never matches any phrase for the rule: a = !a 'b' ; see https://github.com/harc/ohm/issues/120" do
+      # a -> !a "b"
       # This rule is paradoxical - a is defined to recognize a string that is not prefixed with itself, therefore, it can't
-      # recognize any string; however, if a can't recognize anything, then by failing to recognize anything, `~e` succeeds,
+      # recognize any string; however, if a can't recognize anything, then by failing to recognize anything, `!e` succeeds,
       # which then allows `a` to match the "b" terminal when the input string is "b". But then if a can recognize "b", 
-      # then `~a` should prevent `a` from matching the "b" terminal, resulting in `a` not being able to recognize anything.
+      # then `!a` should prevent `a` from matching the "b" terminal, resulting in `a` not being able to recognize anything.
       # So, which is it?
       # My gut feeling is that it should not match anything.
 

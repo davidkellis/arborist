@@ -6,7 +6,7 @@ def run(grammar_file_path, input_file_path)
   grammar = Arborist::Grammar.new(grammar_file_path)
   parse_tree = grammar.parse_file(input_file_path)
   if parse_tree
-    puts "success"
+    puts parse_tree.s_exp
     # puts parse_tree.to_msgpack
   else
     STDERR.puts "Failed parsing."

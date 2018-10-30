@@ -31,8 +31,7 @@ module Arborist
         star(apply("Rule")).label("unnamed")
       )
 
-      # Rule = ident "=" RuleBody
-      Rule = seq(apply("ident"), term("="), apply("RuleBody")).label("define")
+      Rule = seq(apply("ident"), term("<-"), apply("RuleBody")).label("define")
 
       RuleBody = seq(opt(term("/")), apply("TopLevelTerm"), star(seq(term("/"), apply("TopLevelTerm"))))
 
@@ -46,7 +45,7 @@ module Arborist
       Seq = star(apply("Pred"))
 
       Pred = choice(
-        seq(term("~"), apply("Iter")).label("neg"),
+        seq(term("!"), apply("Iter")).label("neg"),
         seq(term("&"), apply("Iter")).label("pos"),
         apply("Iter").label("iter"),
       )
@@ -72,16 +71,12 @@ module Arborist
       # )
 
       Base = choice(
-        seq(apply("ident"), neg(seq(opt(apply("ruleDescr")), term("=")))).label("application"),
+        seq(apply("ident"), neg(term("<-")), neg(term("="))).label("application"),
         seq(apply("oneCharTerminal"), term(".."), apply("oneCharTerminal")).label("range"),
         apply("terminal").label("terminal"),
         seq(term("("), apply("Alt"), term(")")).label("group"),
         term(".").label("dot")
       )
-
-      RuleDescr = seq(term("("), apply("ruleDescrText"), term(")"))
-
-      RuleDescrText = star(seq(neg(term(")")), dot))
 
       CaseName = seq(
         term("--"),
@@ -133,7 +128,12 @@ module Arborist
       # matches of the `skip` rule occurring immediately prior to or immediately following any of the terms that make up the rule body.
       # In other words, the rule `Foo = "bar" "baz"` would match on the string "  \n\tbar      \t\t\n\n    baz \t\n "", and the
       # whitespace in between the terms would be ignored.
-      Skip = star(apply("space"))
+      Skip = star(
+        choice(
+          range('\u0000'..' '),
+          apply("comment")
+        )
+      )
       
       Space = choice(
         range('\u0000'..' '),
@@ -141,8 +141,8 @@ module Arborist
       )
 
       # comment
-      #   = "//" (~"\n" dot)* "\n"  -- singleLine
-      #   / "/*" (~"*/" dot)* "*/"  -- multiLine
+      #   = "//" (!"\n" dot)* "\n"  -- singleLine
+      #   / "/*" (!"*/" dot)* "*/"  -- multiLine
       Comment = choice(
         seq(term("//"), star(seq(neg(term("\n")), dot)), term("\n")).label("singleLine"),
         seq(term("/*"), star(seq(neg(term("*/")), dot)), term("*/")).label("multiLine")
@@ -184,8 +184,6 @@ module Arborist
         .add_rule("Label", Label)
         # .add_rule("Lex", Lex)
         .add_rule("Base", Base)
-        .add_rule("ruleDescr", RuleDescr)
-        .add_rule("ruleDescrText", RuleDescrText)
         .add_rule("caseName", CaseName)
         .add_rule("name", Name)
         .add_rule("nameFirst", NameFirst)
@@ -233,17 +231,6 @@ module Arborist
         @visitor = Visitor(Matcher | Expr | String).new
         @matcher = Matcher.new
 
-        # @visitor.on("Grammar_named") do |grammar|
-        #   grammar.captures("Rule").each do |rule_node|
-        #     build_rule_and_add_to_matcher(rule_node)
-        #   end
-        # end
-        # @visitor.on("Grammar_unnamed") do |grammar|
-        #   grammar.captures("Rule").each do |rule_node|
-        #     build_rule_and_add_to_matcher(rule_node)
-        #   end
-        # end
-        
         @visitor.on("Grammar_named") do |grammar|
           grammar.captures("Rule").each do |rule_node|
             rule_name = rule_node.capture("ident").text
@@ -383,17 +370,6 @@ module Arborist
         @visitor
       end
 
-      # def build_rule_and_add_to_matcher(rule_node)
-      #   rule_name = rule_node.capture("ident").text
-      #   rule_expr = build_parse_expression_for_rule_body(rule_node.capture("RuleBody"))
-      #   @matcher.add_rule(rule_name, rule_expr)
-      # end
-
-      # def build_parse_expression_for_rule_body(rule_body_node) : Expr
-      #   top_level_terms = rule_body_node.captures("TopLevelTerm")
-      #   choice()
-      # end
-
       # takes a parse tree for an Arborist grammar definition and returns a Matcher that can build parse
       # trees for that grammar definition
       def build_grammar_parser(parse_tree : ApplyTree) : Matcher
@@ -443,5 +419,8 @@ module Arborist
       matcher.match(input_str)
     end
 
+    def rules
+      @matcher.try(&.rules) || Hash(String, Rule).new
+    end
   end
 end
