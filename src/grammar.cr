@@ -399,8 +399,12 @@ module Arborist
 
     def build_matcher(grammar_defn : String) : Matcher?
       grammar_parse_tree = Rules::GrammarParser.match(grammar_defn, "Grammar")
-      raise "Unable to parse grammar file." unless grammar_parse_tree
-      GrammarParserBuilder.new.build_grammar_parser(grammar_parse_tree)
+      if grammar_parse_tree
+        GrammarParserBuilder.new.build_grammar_parser(grammar_parse_tree)
+      else
+        Rules::GrammarParser.print_match_failure_error
+        raise "Unable to parse grammar file."
+      end
     end
 
     def parse_file(path : String)
@@ -417,6 +421,10 @@ module Arborist
 
     def rules
       @matcher.try(&.rules) || Hash(String, Rule).new
+    end
+
+    def print_match_failure_error
+      @matcher.try(&.print_match_failure_error)
     end
   end
 end

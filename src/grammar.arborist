@@ -82,14 +82,14 @@ Arborist {
 
   // an escape sequence
   escapeChar
-    <- "\\\\"                                     -- backslash
+    <- "\\\\"                                    -- backslash
     / "\\\""                                     -- doubleQuote
     / "\\\'"                                     -- singleQuote
     / "\\b"                                      -- backspace
     / "\\n"                                      -- lineFeed
     / "\\r"                                      -- carriageReturn
     / "\\t"                                      -- tab
-    / "\\u{" hexDigit+ }                         -- unicodeEscapeLong
+    / "\\u{" hexDigit+ "}"                       -- unicodeEscapeLong
     / "\\u" hexDigit hexDigit hexDigit hexDigit  -- unicodeEscape
     / "\\x" hexDigit hexDigit                    -- hexEscape
 
@@ -109,7 +109,7 @@ Arborist {
     <- "//" (!"\n" .)* "\n"  -- singleLine
     / "/*" (!"*/" .)* "*/"  -- multiLine
 
-  alnum  (an alpha-numeric character)
+  alnum
     <- letter
     / digit
 

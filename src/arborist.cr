@@ -112,6 +112,7 @@ module Arborist
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
     property expr_call_stack : Array(ExprCall)
     property fail_all_rules_until_this_rule : ApplyCall?
+    property expr_failures : Hash(Int32, Set(Expr))
 
     def initialize(rules = {} of String => Rule)
       @rules = rules
@@ -120,6 +121,7 @@ module Arborist
       @growing = {} of Rule => Hash(Int32, ParseTree?)
       @expr_call_stack = [] of ExprCall
       @fail_all_rules_until_this_rule = nil
+      @expr_failures = {} of Int32 => Set(Expr)
 
       @input = ""
       @memoTable = {} of Int32 => Column
@@ -173,6 +175,7 @@ module Arborist
       @expr_call_stack = [] of ExprCall
 
       @fail_all_rules_until_this_rule = nil
+      @expr_failures = {} of Int32 => Set(Expr)
     end
 
     def add_skip_rule_if_necessary
@@ -204,31 +207,28 @@ module Arborist
       nil
     end
 
-    # def lookup_previous_rule_application(rule) : ApplyCall?
-    #   i = @expr_call_stack.size - 1
-    #   while i >= 0
-    #     expr_application_i = @expr_call_stack[i]
-    #     i -= 1
-    #     next unless expr_application_i.is_a?(ApplyCall)
-    #     return expr_application_i if expr_application_i.rule == rule
-    #   end
-    #   nil
-    # end
+    def log_match_failure(pos : Int32, expr : Expr) : Nil
+      failures = (@expr_failures[pos] ||= Set(Expr).new)
+      failures << expr
+      nil
+    end
 
-    # def current_rule_being_applied : Rule?
-    #   i = @expr_call_stack.size - 1
-    #   while i >= 0
-    #     expr_application_i = @expr_call_stack[i]
-    #     i -= 1
-    #     next unless expr_application_i.is_a?(ApplyCall)
-    #     return expr_application_i.rule
-    #   end
-    #   nil
-    # end
-
-    # def left_recursive_rule_applications(rule) : Array(ApplyCall)
-    #   @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.rule == rule }.as(Array(ApplyCall))
-    # end
+    def print_match_failure_error
+      pos = @expr_failures.keys.max
+      if pos
+        failed_exprs = @expr_failures[pos]
+        start_pos = [pos - 10, 0].max
+        puts "Malformed input fragment at position #{pos+1}:"
+        puts @input[start_pos, 40]
+        puts "#{"-" * 10}^"
+        puts "Expected one of the following expressions to match at position #{pos+1}:"
+        failed_exprs.each do |expr|
+          puts expr.to_s
+        end
+      else
+        puts "No match failures were logged."
+      end
+    end
 
     def fail_all_rules_back_to(previous_application_of_rule : ApplyCall)
       @fail_all_rules_until_this_rule = previous_application_of_rule
@@ -554,6 +554,7 @@ module Arborist
         if matcher.eof?
           matcher.pos = orig_pos
           matcher.pop_off_of_call_stack
+          matcher.log_match_failure(orig_pos, self)
           return nil
         end
         matcher.consume(c)
@@ -562,6 +563,9 @@ module Arborist
       matcher.pop_off_of_call_stack
       if terminal_matches
         TerminalTree.new(@str, matcher.input, orig_pos, matcher.pos - 1).label(@label)
+      else
+        matcher.log_match_failure(orig_pos, self)
+        nil
       end
     end
 
@@ -610,11 +614,16 @@ module Arborist
       end
 
       matcher.pop_off_of_call_stack
+      matcher.log_match_failure(orig_pos, self) unless parse_tree
       parse_tree
     end
 
     def to_s
-      "alt(\"#{@strings.join("|")}\")"
+      if @strings.size <= 100
+        "alt(\"#{@strings.join("|")}\")"
+      else
+        "alt(\"#{@strings.first(100).join("|")}|...\")"
+      end
     end
   end
 
