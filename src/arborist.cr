@@ -173,7 +173,6 @@ module Arborist
       end
 
       @expr_call_stack = [] of ExprCall
-
       @fail_all_rules_until_this_rule = nil
       @expr_failures = {} of Int32 => Set(Expr)
     end
@@ -322,7 +321,7 @@ module Arborist
 
   # Apply represents the application of a named rule
   class Apply
-    @rule_name : String
+    getter rule_name : String
     property label : String?
 
     def initialize(rule_name)
@@ -337,6 +336,14 @@ module Arborist
     def syntactic_rule?
       first_char = @rule_name[0]?
       first_char.try(&.uppercase?)
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      rule = matcher.get_rule(@rule_name)
+      rule.expr.preorder_traverse(matcher, visit, visited_nodes)
     end
 
     # this implements Tratt's Algorithm 2 in section 6.4 of https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
@@ -529,7 +536,7 @@ module Arborist
 
   # Match string literals
   class Terminal
-    @str : String
+    getter str : String
     property label : String?
 
     def initialize(str)
@@ -539,6 +546,12 @@ module Arborist
     def label(label : String) : Terminal
       @label = label
       self
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
     end
 
     # returns String | Nil
@@ -585,13 +598,19 @@ module Arborist
     getter strings : Set(String)    # all strings in the set have the same length
     property label : String?
 
-    def initialize(@strings)
-      raise "All the alternatives of a MutexAlt must be the same length. String lengths: #{@strings.map(&.size).group_by(&.itself).map{|k,v| [k,v.size] }.to_h}" unless @strings.map(&.size).uniq.size == 1
+    def initialize(@strings : Set(String))
     end
 
     def label(label : String) : MutexAlt
       @label = label
       self
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      exprs.each {|expr| expr.preorder_traverse(matcher, visit, visited_nodes) if expr.responds_to?(:preorder_traverse) }
     end
 
     # returns String | Nil
@@ -642,6 +661,13 @@ module Arborist
       self
     end
 
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      @exps.each {|expr| expr.preorder_traverse(matcher, visit, visited_nodes) }
+    end
+
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
@@ -685,6 +711,13 @@ module Arborist
     def label(label : String) : Sequence
       @label = label
       self
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      @exps.each {|expr| expr.preorder_traverse(matcher, visit, visited_nodes) }
     end
 
     # returns Array(ParseTree) | Nil
@@ -733,6 +766,13 @@ module Arborist
       self
     end
 
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      @exp.preorder_traverse(matcher, visit, visited_nodes)
+    end
+
     # this should return true if the expr does not match, and nil otherwise; do not return false, because nil indicates parse failure
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
@@ -766,6 +806,13 @@ module Arborist
       self
     end
 
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      @exp.preorder_traverse(matcher, visit, visited_nodes)
+    end
+
     # this should return true if the expr matches, and nil otherwise; do not return false, because nil indicates parse failure
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
@@ -796,6 +843,13 @@ module Arborist
     def label(label : String) : Optional
       @label = label
       self
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      @exp.preorder_traverse(matcher, visit, visited_nodes)
     end
 
     # returns Array(ParseTree) | Nil
@@ -838,6 +892,13 @@ module Arborist
     def label(label : String) : Repetition
       @label = label
       self
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      @exp.preorder_traverse(matcher, visit, visited_nodes)
     end
 
     # returns Array(ParseTree) | Nil
@@ -888,6 +949,13 @@ module Arborist
     def label(label : String) : RepetitionOnePlus
       @label = label
       self
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+      @exp.preorder_traverse(matcher, visit, visited_nodes)
     end
 
     # returns Array(ParseTree) | Nil

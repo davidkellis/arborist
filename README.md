@@ -20,6 +20,22 @@ in any lanugage so long as it can read the parse tree format (documentation for 
 
 ## Usage
 
+### Command Line Interface
+
+```bash
+$ cat mygrammar.g
+E <- E - E / E + E / Num
+Num <- ("0".."9")+
+
+$ cat input_document.txt
+1-2+3-4+5
+
+$ arborist -g mygrammar.g input_document.txt
+[[[[["1"], "-", ["2"]], "+", ["3"]], "-", ["4"]], "+", ["5"]]
+```
+
+The parse tree written to stdout may be redirected to a file, piped to another tool, etc.
+
 ### Library
 
 Add this to your application's `shard.yml`:
@@ -94,20 +110,6 @@ parse tree:
 [[[[["1"], "-", ["2"]], [["+", ["1", "0"]]]], "-", ["3"]], [["+", ["1", "0"]]]]
 evaluated value:
 16
-```
-
-### Command Line Interface
-
-```bash
-$ cat mygrammar.g
-E <- E - E / E + E / Num
-Num <- ("0".."9")+
-
-$ cat input_document.txt
-1-2+3-4+5
-
-$ arborist -g mygrammar.g input_document.txt
-[[[[["1"], "-", ["2"]], "+", ["3"]], "-", ["4"]], "+", ["5"]]
 ```
 
 

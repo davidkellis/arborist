@@ -53,6 +53,22 @@ module Arborist
       !!@label
     end
 
+    # returns the name of the rule that, as a result of being evaluated, yielded this parse tree node
+    def enclosing_rule_name : String?
+      parent = parent()
+      if parent
+        if parent.is_a?(ApplyTree)
+          parent.rule_name
+        else
+          parent.enclosing_rule_name
+        end
+      else
+        if self.is_a?(ApplyTree)
+          self.rule_name
+        end
+      end
+    end
+
     def root?
       @parent.nil?
     end
@@ -63,7 +79,7 @@ module Arborist
     end
 
     def postorder_traverse(visit : ParseTree -> _)
-      children.each {|child| child.preorder_traverse(visit) }
+      children.each {|child| child.postorder_traverse(visit) }
       visit.call(self)
     end
 
@@ -129,28 +145,12 @@ module Arborist
       ([self] of ParseTree).concat(descendants)
     end
 
-    def term : ParseTree
-      terms.first
-    end
-
-    def term? : ParseTree
-      terms.first?
-    end
-
-    # "terms", as opposed to children, returns the list of descendant nodes that logically form the children of a 
-    # given ParseTree node
-    # Another way of thinking about this is #children returns concrete children, #terms returns logical children.
-    # In practical terms, only ApplyTree and ChoiceTree differ in their treatment of #children vs. #terms
-    def terms : Array(ParseTree)
-      raise "ParseTree#terms is an abstract method"
-    end
-
     def terminal?
       false
     end
 
     # returns the matched substring of the input that this parse tree node represents
-    def text
+    def text : String
       if finishing_pos < start_pos    # this indicates an expr matched zero text, so we return the empty string
         ""
       else
@@ -181,17 +181,13 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
-      "#{prefix}(apply #{rule_name}\n#{tree.s_exp(indent+2)})"
+      "#{prefix}(apply #{rule_name} ; id=#{object_id} rule_name=\"#{rule_name}\" label=\"#{label}\"\n#{tree.s_exp(indent+2)})"
     end
 
     # query methods
 
     def children : Array(ParseTree)
       [tree] of ParseTree
-    end
-
-    def terms : Array(ParseTree)
-      tree.terms
     end
 
     def visit(visitor : Visitor(R)) : R forall R
@@ -216,17 +212,13 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
-      "#{prefix}(choice\n#{tree.s_exp(indent+2)})"
+      "#{prefix}(choice ; id=#{object_id} label=\"#{label}\"\n#{tree.s_exp(indent+2)})"
     end
 
     # query methods
 
     def children : Array(ParseTree)
       [tree] of ParseTree
-    end
-
-    def terms : Array(ParseTree)
-      tree.terms
     end
   end
 
@@ -250,7 +242,7 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
-      "#{prefix}(seq\n#{seq.map(&.s_exp(indent+2)).join("\n")})"
+      "#{prefix}(seq ; id=#{object_id} label=\"#{label}\"\n#{seq.map(&.s_exp(indent+2)).join("\n")})"
     end
 
     # query methods
@@ -281,7 +273,7 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
-      "#{prefix}\"#{@str}\""
+      "#{prefix}\"#{@str}\"[id=#{object_id} label=\"#{label}\"]"
     end
 
     # query methods
@@ -291,10 +283,6 @@ module Arborist
     end
 
     def children : Array(ParseTree)
-      [] of ParseTree
-    end
-
-    def terms : Array(ParseTree)
       [] of ParseTree
     end
   end
@@ -316,7 +304,7 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
-      "#{prefix}\"#{@str}\""
+      "#{prefix}\"#{@str}\"MA[id=#{object_id} label=\"#{label}\"]"
     end
 
     # query methods
@@ -326,10 +314,6 @@ module Arborist
     end
 
     def children : Array(ParseTree)
-      [] of ParseTree
-    end
-
-    def terms : Array(ParseTree)
       [] of ParseTree
     end
   end
@@ -359,10 +343,6 @@ module Arborist
     def children : Array(ParseTree)
       raise "NegLookAheadTree#children undefined"
     end
-
-    def terms : Array(ParseTree)
-      raise "NegLookAheadTree#terms undefined"
-    end
   end
 
   class PosLookAheadTree < ParseTree
@@ -390,10 +370,6 @@ module Arborist
     def children : Array(ParseTree)
       raise "PosLookAheadTree#children undefined"
     end
-
-    def terms : Array(ParseTree)
-      raise "PosLookAheadTree#terms undefined"
-    end
   end
 
   class OptionalTree < ParseTree
@@ -415,7 +391,7 @@ module Arborist
       tree = @tree
       if tree
         prefix = " " * indent
-        "#{prefix}(opt\n#{tree.s_exp(indent+2)})"
+        "#{prefix}(opt ; id=#{object_id} label=\"#{label}\"\n#{tree.s_exp(indent+2)})"
       else
         ""
       end
@@ -424,13 +400,6 @@ module Arborist
     # query methods
 
     def children : Array(ParseTree)
-      [tree].compact
-    end
-
-    # We're treating Optional and Repetition expression nodes the same in this respect, they both represent a 
-    # repetition of expression nodes, therefore, #term will return an array of expression nodes matched
-    # by the repetition expression.
-    def terms : Array(ParseTree)
       [tree].compact
     end
   end
@@ -452,16 +421,12 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
-      "#{prefix}(repeat\n#{trees.map(&.s_exp(indent+2)).join("\n")})"
+      "#{prefix}(repeat ; id=#{object_id} label=\"#{label}\"\n#{trees.map(&.s_exp(indent+2)).join("\n")})"
     end
 
     # query methods
 
     def children : Array(ParseTree)
-      trees
-    end
-
-    def terms : Array(ParseTree)
       trees
     end
   end

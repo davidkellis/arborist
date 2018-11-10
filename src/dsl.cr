@@ -1,7 +1,7 @@
 module Arborist
-  module DSL
-    ALPHABET = ((' '..'~').map(&.to_s) + ["\n"] + ["\t"])
+  ALPHABET = ((' '..'~').map(&.to_s) + ["\n"] + ["\t"]).to_set
 
+  module DSL
     def label(label : String, expr : Expr) : Expr
       expr.label(label)
       expr
@@ -31,7 +31,11 @@ module Arborist
     end
 
     def alt(strings : Array(String)) : Expr
-      MutexAlt.new(strings.to_set)
+      alt(strings.to_set)
+    end
+
+    def alt(strings : Set(String)) : Expr
+      MutexAlt.new(strings)
     end
 
     def choice(*alternatives) : Expr
@@ -59,7 +63,7 @@ module Arborist
     def dot(alphabet = ALPHABET) : Expr
       # terms = alphabet.map {|char| term(char.to_s).as(Expr) }
       # choice(terms)
-      alt(alphabet.map(&.to_s))
+      alt(alphabet)
     end
 
     def seq(*exprs) : Expr
