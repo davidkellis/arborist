@@ -65,10 +65,20 @@ module Arborist
       # )
 
       Base = choice(
+        apply("mutexAlt").label("mutexAlt"),
         seq(apply("ident"), neg(term("<-")), neg(term("="))).label("application"),
         apply("range").label("range"),
         apply("terminal").label("terminal"),
         seq(term("("), apply("Alt"), term(")")).label("group"),
+        term(".").label("dot")
+      )
+
+      MutexAlt = seq(apply("mutexAltTerm"), plus(seq(term("|"), apply("mutexAltTerm"))))
+
+      MutexAltTerm = choice(
+        seq(apply("ident"), neg(term("<-")), neg(term("="))).label("application"),
+        apply("range").label("range"),
+        apply("terminal").label("terminal"),
         term(".").label("dot")
       )
 
@@ -185,6 +195,8 @@ module Arborist
         # .add_rule("MutexAlt", MutexAlt)
         # .add_rule("Lex", Lex)
         .add_rule("Base", Base)
+        .add_rule("mutexAlt", MutexAlt)
+        .add_rule("mutexAltTerm", MutexAltTerm)
         .add_rule("range", Range)
         .add_rule("caseName", CaseName)
         .add_rule("name", Name)

@@ -13,7 +13,8 @@ module Arborist
       # trees for that grammar definition
       def build_grammar_parser(grammar_parse_tree : ApplyTree) : Matcher
         @rule_name_to_parse_tree_map = build_rule_name_to_parse_tree_map(grammar_parse_tree)
-        @parse_tree_to_mutex_alt_map = build_parse_tree_to_mutex_alt_map(grammar_parse_tree)
+        @parse_tree_to_mutex_alt_map = Hash(ParseTree, MutexAlt?).new
+        # @parse_tree_to_mutex_alt_map = build_parse_tree_to_mutex_alt_map(grammar_parse_tree)
         build_parser_for_grammar(grammar_parse_tree)
       end
 
@@ -43,16 +44,16 @@ module Arborist
         visitor.visit(parse_tree)   # return the rule-name -> rule-body-parse-tree pairs
       end
 
-      def build_parse_tree_to_mutex_alt_map(parse_tree : ParseTree) : Hash(ParseTree, MutexAlt?)
-        @parse_tree_to_mutex_alt_map = Hash(ParseTree, MutexAlt?).new
-        parse_tree.postorder_traverse(->(pt : ParseTree) {
-          if pt.is_a?(ApplyTree)
-            parse_tree_for_rule = pt.child
-            @parse_tree_to_mutex_alt_map[pt] = build_mutex_alt_for_rule_parse_tree(pt.rule_name, parse_tree_for_rule, @rule_name_to_parse_tree_map)
-          end
-        })
-        @parse_tree_to_mutex_alt_map
-      end
+      # def build_parse_tree_to_mutex_alt_map(parse_tree : ParseTree) : Hash(ParseTree, MutexAlt?)
+      #   @parse_tree_to_mutex_alt_map = Hash(ParseTree, MutexAlt?).new
+      #   parse_tree.postorder_traverse(->(pt : ParseTree) {
+      #     if pt.is_a?(ApplyTree)
+      #       parse_tree_for_rule = pt.child
+      #       @parse_tree_to_mutex_alt_map[pt] = build_mutex_alt_for_rule_parse_tree(pt.rule_name, parse_tree_for_rule, @rule_name_to_parse_tree_map)
+      #     end
+      #   })
+      #   @parse_tree_to_mutex_alt_map
+      # end
 
       # # returns a MutexAlt if the rule can be represented as a MutexAlt; nil otherwise
       # def build_mutex_alt_for_rule_name(rule_name : String, rule_name_to_parse_tree_map : Hash(String, ParseTree)) : MutexAlt?
@@ -142,9 +143,14 @@ module Arborist
           raise MutexAltBuildFailure.new("Rule rule encountered")
         when "RuleBody"
           top_level_terms = parse_tree.captures("TopLevelTerm")
-          top_level_terms.each do |top_level_term|
-            build_mutex_alt_string_set_for_rule_parse_tree(top_level_term.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          if top_level_terms.size == 1
+            build_mutex_alt_string_set_for_rule_parse_tree(top_level_terms.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          elsif top_level_terms.size > 1
+            raise MutexAltBuildFailure.new("RuleBody rule has too many alternatives; it can only have one.")
           end
+          # top_level_terms.each do |top_level_term|
+          #   build_mutex_alt_string_set_for_rule_parse_tree(top_level_term.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          # end
         when "TopLevelTerm"
           seq = case top_level_alternative_label(parse_tree)
           when "inline"
@@ -155,9 +161,14 @@ module Arborist
           build_mutex_alt_string_set_for_rule_parse_tree(seq.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
         when "Alt"
           seq_nodes = parse_tree.captures("Seq")
-          seq_nodes.each do |seq|
-            build_mutex_alt_string_set_for_rule_parse_tree(seq.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          if seq_nodes.size == 1
+            build_mutex_alt_string_set_for_rule_parse_tree(seq_nodes.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          elsif seq_nodes.size > 1
+            raise MutexAltBuildFailure.new("Alt rule has too many alternatives; it can only have one.")
           end
+          # seq_nodes.each do |seq|
+          #   build_mutex_alt_string_set_for_rule_parse_tree(seq.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          # end
         when "Seq"
           pred_nodes = parse_tree.captures("Pred")
           if pred_nodes.size == 1
@@ -210,6 +221,9 @@ module Arborist
         #   end
         when "Base"
           case top_level_alternative_label(parse_tree)
+          when "mutexAlt"
+            mutexAlt = parse_tree.capture("mutexAlt")
+            build_mutex_alt_string_set_for_rule_parse_tree(mutexAlt.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
           when "application"
             referenced_rule_name = parse_tree.capture("ident").text
             parse_tree = rule_name_to_parse_tree_map[referenced_rule_name]
@@ -224,6 +238,27 @@ module Arborist
           when "group"
             alt = parse_tree.capture("Alt")
             build_mutex_alt_string_set_for_rule_parse_tree(alt.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          when "dot"
+            add_to_mutex_alt_set(strings, ALPHABET)
+          end
+        when "mutexAlt"
+          mutex_alt_parse_trees = parse_tree.captures("mutexAltTerm")
+          mutex_alt_parse_trees.each do |mutex_alt_parse_tree|
+            build_mutex_alt_string_set_for_rule_parse_tree(mutex_alt_parse_tree.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          end
+        when "mutexAltTerm"
+          case top_level_alternative_label(parse_tree)
+          when "application"
+            referenced_rule_name = parse_tree.capture("ident").text
+            parse_tree = rule_name_to_parse_tree_map[referenced_rule_name]
+            rule_name = parse_tree.enclosing_rule_name || raise "Unable to identify the name of the grammar rule in the Arborist grammar that recognized/produced the parse tree for the rule body/definition of the #{referenced_rule_name} rule in the user's grammar."
+            build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, visited_nodes, strings)
+          when "range"
+            range = parse_tree.capture("range")
+            build_mutex_alt_string_set_for_rule_parse_tree(range.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
+          when "terminal"
+            terminal = parse_tree.capture("terminal")
+            build_mutex_alt_string_set_for_rule_parse_tree(terminal.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
           when "dot"
             add_to_mutex_alt_set(strings, ALPHABET)
           end
@@ -295,83 +330,53 @@ module Arborist
         end
 
         visitor.on("RuleBody") do |parse_tree|
-          # if this parse tree node can be represented by MutexAlt expression, then return that MutexAlt expression
-          # todo: verify that the following line is appropriate in every visitor function
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-
           choice(parse_tree.captures("TopLevelTerm").map(&.visit(visitor).as(Expr)))
         end
 
         visitor.on("TopLevelTerm_inline") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-
           label_name = parse_tree.capture("caseName").text
           parse_tree.capture("Seq").visit(visitor).as(Expr).label(label_name)
         end
         visitor.on("TopLevelTerm_seq") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-
           parse_tree.capture("seq").visit(visitor)
         end
 
         visitor.on("Alt") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-
           choice(parse_tree.captures("Seq").map(&.visit(visitor).as(Expr)))
         end
 
         visitor.on("Seq") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-
           seq(parse_tree.captures("Pred").map(&.visit(visitor).as(Expr)))
         end
 
         visitor.on("Pred_neg") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-
           neg(parse_tree.capture("Iter").visit(visitor).as(Expr))
         end
         visitor.on("Pred_pos") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-
           pos(parse_tree.capture("Iter").visit(visitor).as(Expr))
         end
         visitor.on("Pred_iter") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           parse_tree.capture("iter").visit(visitor)
         end
 
         visitor.on("Iter_star") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           star(parse_tree.capture("Label").visit(visitor).as(Expr))
         end
         visitor.on("Iter_plus") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           plus(parse_tree.capture("Label").visit(visitor).as(Expr))
         end
         visitor.on("Iter_opt") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           opt(parse_tree.capture("Label").visit(visitor).as(Expr))
         end
         visitor.on("Iter_label") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           parse_tree.capture("label").visit(visitor)
         end
 
         visitor.on("Label_label") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           label_string = parse_tree.capture("ident").text
           parse_tree.capture("Base").visit(visitor).as(Expr).label(label_string)
         end
         visitor.on("Label_base") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           parse_tree.capture("base").visit(visitor)
         end
 
@@ -379,49 +384,62 @@ module Arborist
         # presence of "|" operators, and therefore alternatives) ...
         # (case 1) ... then we want to return a MutexAlt,
         # visitor.on("MutexAlt_alts") do |parse_tree|
-        #   (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
         #   base_apply_trees = parse_tree.captures("Base").map(&.as(ApplyTree))
         #   string_alts = get_mutex_alt_arguments_from_rule_applications(visitor, base_apply_trees)
         #   alt(string_alts)
         # end
         # # (case 2) ...otherwise we want to fall through to the wrapped rules
         # visitor.on("MutexAlt_base") do |parse_tree|
-        #   (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
         #   parse_tree.capture("base").visit(visitor)
         # end
 
+        visitor.on("Base_mutexAlt") do |parse_tree|
+          parse_tree.capture("mutexAlt").visit(visitor)
+        end
         visitor.on("Base_application") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           rule_name = parse_tree.capture("ident").text
           apply(rule_name)
         end
         visitor.on("Base_range") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           parse_tree.capture("range").visit(visitor)
         end
         visitor.on("Base_terminal") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           parse_tree.capture("terminal").visit(visitor)
         end
         visitor.on("Base_group") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           parse_tree.capture("Alt").visit(visitor)
         end
         visitor.on("Base_dot") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           dot
         end
 
-        visitor.on("range") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
+        # A MutexAlt application represents a set of terminals of the same length (implied by the 
+        # presence of "|" operators, and therefore alternatives), so we want to build up a MutexAlt
+        # and then return it
+        visitor.on("mutexAlt") do |parse_tree|
+          mutex_alt_term_parse_trees = parse_tree.captures("mutexAltTerm").map(&.as(ApplyTree))
+          mutex_alts = mutex_alt_term_parse_trees.map do |apply_tree|
+            rule_name = apply_tree.rule_name
+            rule_parse_tree_body = apply_tree.child
+            mutex_alt = build_mutex_alt_for_rule_parse_tree(rule_name, rule_parse_tree_body, @rule_name_to_parse_tree_map)
+            mutex_alt || raise "Unable to build MutexAlt for parse tree. It must be an invalid MutexAlt specification."
+          end
+          alt(mutex_alts)
+        end
+        visitor.on("mutexAltTerm_application") do |parse_tree|
+          raise "Error: mutexAltTerm_application should not be visited."
+        end
+        visitor.on("mutexAltTerm_range") do |parse_tree|
+          raise "Error: mutexAltTerm_range should not be visited."
+        end
+        visitor.on("mutexAltTerm_terminal") do |parse_tree|
+          raise "Error: mutexAltTerm_terminal should not be visited."
+        end
+        visitor.on("mutexAltTerm_dot") do |parse_tree|
+          raise "Error: mutexAltTerm_dot should not be visited."
+        end
 
+        visitor.on("range") do |parse_tree|
           # start_char_str : String = range.capture("start_char").capture("terminalChar").visit(visitor).as(String)
           # end_char_str : String = range.capture("end_char").capture("terminalChar").visit(visitor).as(String)
           # start_char = start_char_str[0]
@@ -433,8 +451,6 @@ module Arborist
         end
 
         visitor.on("terminal") do |parse_tree|
-          (mutex_alt = mutex_alt?(parse_tree)) && next mutex_alt
-          
           terminal_char_strs : Array(String) = parse_tree.captures("terminalChar").map(&.visit(visitor).as(String))
           str = terminal_char_strs.join("")
           term(str)

@@ -12,7 +12,7 @@ describe Arborist do
 
       g.parse("").should be_nil
       g.parse("blah").should be_nil
-      g.parse("foo").try(&.syntax_tree).should eq("foo")
+      g.parse("foo").try(&.syntax_tree).should eq(["foo"])
     end
 
     it "loads a more complicated grammar definition" do
@@ -23,8 +23,8 @@ describe Arborist do
 
       g.parse("").should be_nil
       g.parse("blah").should be_nil
-      g.parse("foobarbaz").try(&.syntax_tree).should eq(["foo", ["bar"], ["baz"]])
-      g.parse("  foo  bar  baz").try(&.syntax_tree).should eq(["foo", ["bar"], ["baz"]])
+      g.parse("foobarbaz").try(&.syntax_tree).should eq([["foo"], [["bar"]], [["baz"]]])
+      g.parse("  foo  bar  baz").try(&.syntax_tree).should eq([["foo"], [["bar"]], [["baz"]]])
     end
   end
 end

@@ -54,10 +54,20 @@ Arborist {
 //    / Base                          -- base
 
   Base
-    <- ident !"<-" !"="             -- application
+    <- mutexAlt                     -- mutexAlt
+    / ident !"<-" !"="              -- application
     / range                         -- range
     / terminal                      -- terminal
     / "(" Alt ")"                   -- group
+    / "."                           -- dot
+  
+  mutexAlt
+    <- mutexAltTerm ("|" mutexAltTerm)+
+  
+  mutexAltTerm
+    <- ident !"<-" !"="             -- application
+    / range                         -- range
+    / terminal                      -- terminal
     / "."                           -- dot
 
   range
