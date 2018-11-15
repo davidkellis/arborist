@@ -48,6 +48,7 @@ module Arborist
   # The various ExprCall classes represent invocations, or calls, of the various expression types, at different positions
   # in an input string. The invocations/calls form a call stack, because a PEG parser is by nature a recursive descent parser,
   # and each rule application and the evaluations of the different expressions that make up those rules form a call stack.
+  # The ExprCall classes are only used during the parse, to represent the items on the expression call stack.
   class ExprCall
     property expr : Expr
     property pos : Int32
@@ -109,6 +110,18 @@ module Arborist
     end
   end
 
+  enum SpecialTokens
+    Indent
+    Dedent
+  end
+
+  alias Token = Char | SpecialTokens
+
+  enum ParsingMode
+    PythonMode    # WhitespaceAtStartOfLineIndicatesIndentationLevel    # Python mode
+    Standard
+  end
+
   class Matcher
     include DSL
     
@@ -120,8 +133,11 @@ module Arborist
     property expr_call_stack : Array(ExprCall)
     property fail_all_rules_until_this_rule : ApplyCall?
     property expr_failures : Hash(Int32, Set(Expr))
+    property indent_level : Int32
+    property indent_stack : Array(String)
+    property parsing_mode : ParsingMode
 
-    def initialize(rules = {} of String => Rule)
+    def initialize(@parsing_mode : ParsingMode, rules = {} of String => Rule)
       @rules = rules
 
       # these structures are necessary for handling left recursion
@@ -133,6 +149,12 @@ module Arborist
       @input = ""
       @memoTable = {} of Int32 => Column
       @pos = 0
+      @indent_level = 0
+      @indent_stack = [] of String
+    end
+
+    def python_mode?
+      @parsing_mode == ParsingMode::PythonMode
     end
 
     def add_rule(rule_name, expr : Expr)
@@ -170,6 +192,8 @@ module Arborist
       @memoTable = {} of Int32 => Column
 
       @pos = 0
+      @indent_level = 0
+      @indent_stack = [] of String
 
       add_skip_rule_if_necessary
 
@@ -281,17 +305,91 @@ module Arborist
       @pos >= @input.size
     end
 
-    def consume(c : Char) : Bool
-      if @input[@pos] == c
-        @pos += 1
-        true
-      else
-        false
+    def start_of_line?
+      @input[@pos - 1]? == "\n"
+    end
+
+    def consume(c : Token) : Bool
+      case c
+      when Char
+        if @input[@pos] == c
+          @pos += 1
+          true
+        else
+          false
+        end
+      when SpecialTokens::Indent
+        return false unless python_mode?
+        if start_of_line?
+          orig_pos = @pos
+          if consume_same_level_indentation
+            # try and consume the next level indent
+            # check to see if there is any indentation left before the first non-whitespace character
+            space_str = consume_spaces_until_first_non_space_character
+            if space_str.size > 0         # if there is any whitespace remaining, then we have indented -> success
+              @indent_level += 1
+              @indent_stack.push(space_str)
+              true
+            else                          # if there's no whitespace remaining, then we haven't indented -> failure
+              @pos = orig_pos
+              false
+            end
+          else
+            @pos = orig_pos
+            false
+          end
+        else
+          false
+        end
+      when SpecialTokens::Dedent
+        return false unless python_mode?
+        if start_of_line?
+          orig_pos = @pos
+          if consume_previous_level_indentation
+            # check to see if there is any indentation left before the first non-whitespace character
+            space_str = consume_spaces_until_first_non_space_character
+            if space_str.size > 0         # if there is any whitespace remaining, then we haven't dedented -> failure
+              @pos = orig_pos
+              false
+            else                          # if there's no whitespace remaining, then we have dedented -> success
+              @indent_level -= 1
+              @indent_stack.pop
+              true
+            end
+          else
+            @pos = orig_pos
+            false
+          end
+        else
+          false
+        end
       end
     end
 
-    # consumes a string of length `count`
-    # returns nil if unable to consume `count` characters
+    def consume_same_level_indentation : Bool
+      @indent_stack.all? {|indent_string| consume(indent_string.size) == indent_string }
+    end
+
+    def consume_previous_level_indentation : Bool
+      @indent_stack.first(@indent_stack.size - 1).all? {|indent_string| consume(indent_string.size) == indent_string }
+    end
+
+    def consume_spaces_until_first_non_space_character : String
+      start_pos = @pos
+      while is_space(@input[@pos])
+        @pos += 1
+        break if @pos >= @input.size
+      end
+      @input[start_pos...@pos]
+    end
+
+    # returns true if `chr` is a space or tab
+    def is_space(chr : Char) : Bool
+      chr == ' ' || chr == '\t'
+    end
+
+    # consumes a string consisting of `count` tokens
+    # returns nil if unable to consume `count` tokens
     def consume(count : Int32) : String?
       remaining_chars_in_input = @input.size - @pos
       return nil if count > remaining_chars_in_input
