@@ -22,7 +22,30 @@ module Arborist
     property parent : ParseTree?
     @captures : Hash(String, Array(ParseTree))?
     @local_captures : Hash(String, Array(ParseTree))?
-    
+
+    # This method returns a serialized representation of the specified parse tree, encoded with MessagePack.
+    # The serialization layout is:
+    # <input><array of ParseTree nodes>
+    # Each ParseTree node is represented with the following structure:
+    # <node type (ApplyTree | TerminalTree | ...)>
+    # <node ID>
+    # <input start position (inclusive)>
+    # <input end position (inclusive)>
+    # <node label (may be nil)>
+    # <parent node ID (may be nil)>
+    # <array of children node IDs>
+    # <array of captures, where each capture is a 4-tuple (String,Int32,Int32,Int32), 
+    #   representing (capture name, node ID belonging to referenced node, input start position inclusive, input end position inclusive) >
+    # <node attributes specific to the type of node (e.g. ApplyTree has a `rule_name` attribute; TerminalTree has a `str` attribute; etc.)>
+    def self.to_msgpack(parse_tree : ParseTree) : Bytes
+      packer = MessagePack::Packer.new
+      parse_tree.input.to_msgpack(packer)
+      parse_tree.postorder_traverse do |parse_tree_node|
+        parse_tree_node.to_msgpack(packer)
+      end
+      packer.to_slice
+    end
+
     def initialize
       @input = ""
       @label = nil
@@ -46,6 +69,44 @@ module Arborist
     def s_exp(indent : Int32 = 0) : String
       raise "ParseTree#s_exp is an abstract method"
     end
+
+    # Each ParseTree node is represented with the following structure:
+    # <node type (ApplyTree | TerminalTree | ...)>
+    # <node ID>
+    # <input start position (inclusive)>
+    # <input end position (inclusive)>
+    # <node label (may be nil)>
+    # <parent node ID (may be nil)>
+    # <array of children node IDs>
+    # <map of captures, having type Map(String, Array(UInt64)), representing:
+    #   <capture name> => [node ID belonging to referenced node, another node ID belonging to referenced node, ...],
+    #   <capture name> => [node ID belonging to referenced node, another node ID belonging to referenced node, ...],
+    #   ...
+    # >
+    # <node attributes specific to the type of node (e.g. ApplyTree has a `rule_name` attribute; TerminalTree has a `str` attribute; etc.)>
+    def to_msgpack(packer : MessagePack::Packer)
+      self.class.name.split(":").last.to_msgpack(packer)    # all the class names are prefixed with Arborist::, like: Arborist::ApplyTree
+      object_id.to_msgpack(packer)
+      start_pos.to_msgpack(packer)
+      finishing_pos.to_msgpack(packer)
+      label.to_msgpack(packer)
+      if parent = self.parent
+        parent.object_id.to_msgpack(packer)
+      else
+        nil.to_msgpack(packer)
+      end
+      children.map(&.object_id).to_msgpack(packer)
+      captures.map do |capture_name, parse_tree_nodes|
+        parse_tree_node_ids = parse_tree_nodes.map(&.object_id)
+        [capture_name, parse_tree_node_ids]
+      end.to_h.to_msgpack(packer)
+      parse_tree_type_specific_attributes_to_msgpack(packer)
+    end
+
+    def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
+      # default implementation is a No-Op
+    end
+
     
     # the following query methods are useful for exploring and querying the parse tree
 
@@ -76,6 +137,10 @@ module Arborist
     def preorder_traverse(visit : ParseTree -> _)
       visit.call(self)
       children.each {|child| child.preorder_traverse(visit) }
+    end
+
+    def postorder_traverse(&visit : ParseTree -> _)
+      postorder_traverse(visit)
     end
 
     def postorder_traverse(visit : ParseTree -> _)
@@ -184,6 +249,10 @@ module Arborist
       "#{prefix}(apply #{rule_name} ; id=#{object_id} rule_name=\"#{rule_name}\" label=\"#{label}\"\n#{tree.s_exp(indent+2)})"
     end
 
+    def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
+      rule_name.to_msgpack(packer)
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -250,10 +319,6 @@ module Arborist
     def children : Array(ParseTree)
       seq
     end
-
-    def children : Array(ParseTree)
-      seq
-    end
   end
 
   class TerminalTree < ParseTree
@@ -274,6 +339,10 @@ module Arborist
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
       "#{prefix}\"#{@str}\"[id=#{object_id} label=\"#{label}\"]"
+    end
+
+    def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
+      str.to_msgpack(packer)
     end
 
     # query methods
@@ -307,6 +376,10 @@ module Arborist
       "#{prefix}\"#{@str}\"MA[id=#{object_id} label=\"#{label}\"]"
     end
 
+    def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
+      str.to_msgpack(packer)
+    end
+
     # query methods
 
     def terminal?
@@ -338,6 +411,10 @@ module Arborist
       raise "NegLookAheadTree#s_exp undefined"
     end
 
+    def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
+      raise "NegLookAheadTree#parse_tree_type_specific_attributes_to_msgpack undefined"
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -363,6 +440,10 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       raise "PosLookAheadTree#s_exp undefined"
+    end
+
+    def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
+      raise "PosLookAheadTree#parse_tree_type_specific_attributes_to_msgpack undefined"
     end
 
     # query methods

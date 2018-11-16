@@ -1,15 +1,20 @@
 require "option_parser"
 
 require "./grammar"
+require "./parse_tree"
 
-def run(grammar_file_path, input_file_path)
-  puts "loading grammar:"
+def run(grammar_file_path, input_file_path, print_mode)
+  # puts "loading grammar:"
   grammar = Arborist::Grammar.new(grammar_file_path)
-  puts "parsing input file:"
+  # puts "parsing input file:"
   parse_tree = grammar.parse_file(input_file_path)
   if parse_tree
-    puts parse_tree.s_exp
-    # puts parse_tree.to_msgpack
+    case print_mode
+    when :sexp
+      puts parse_tree.s_exp
+    when :binary
+      STDOUT.write(Arborist::ParseTree.to_msgpack(parse_tree))
+    end
   else
     grammar.print_match_failure_error
     STDERR.puts "Failed parsing."
@@ -30,12 +35,14 @@ end
 def main
   grammar_file = nil
   args = [] of String
+  print_mode = :binary
 
   OptionParser.parse! do |parser|
     parser.banner = "Usage: arborist -e grammar_file.g file_to_parse.ext"
     parser.on("-d", "Enable debug mode.") { Config.debug = true }
     parser.on("-g grammar_file.g", "Specifies the grammar file") { |file_name| Config.grammar_file = file_name }
     parser.on("-h", "--help", "Show this help") { puts parser; exit }
+    parser.on("-s", "Print the parse tree as an s-expression. (default is binary mode)") { print_mode = :sexp }
     parser.invalid_option do |flag|
       STDERR.puts "ERROR: #{flag} is not a valid option."
       STDERR.puts parser
@@ -53,7 +60,7 @@ def main
   (STDERR.puts("Input file must be specified") ; exit(1)) unless input_file
   (STDERR.puts("Input file \"#{input_file}\" does not exist") ; exit(1)) unless File.exists?(input_file.as(String))
 
-  run(Config.grammar_file.as(String), input_file.as(String))
+  run(Config.grammar_file.as(String), input_file.as(String), print_mode)
 end
 
 main
