@@ -6,4 +6,5 @@ Test {
   bar <- "bar"
   baz <- "baz"
   qux <- "qux"
+  quux <- "a" | "b"
 }

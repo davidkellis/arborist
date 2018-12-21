@@ -18,8 +18,8 @@ describe Arborist do
     it "loads a more complicated grammar definition" do
       g = Grammar.new("spec/testgrammar2.arborist")
 
-      g.rules.size.should eq(5)
-      g.rules.keys.sort.should eq(["Start", "bar", "baz", "foo", "qux"])
+      g.rules.size.should eq(6)
+      g.rules.keys.sort.should eq(["Start", "bar", "baz", "foo", "quux", "qux"])
 
       g.parse("").should be_nil
       g.parse("blah").should be_nil

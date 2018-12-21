@@ -241,7 +241,7 @@ module Arborist
           when "dot"
             add_to_mutex_alt_set(strings, ALPHABET)
           end
-        when "mutexAlt"
+        when "MutexAlt"
           mutex_alt_parse_trees = parse_tree.captures("mutexAltTerm")
           mutex_alt_parse_trees.each do |mutex_alt_parse_tree|
             build_mutex_alt_string_set_for_rule_parse_tree(mutex_alt_parse_tree.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, strings)
@@ -416,7 +416,7 @@ module Arborist
         # A MutexAlt application represents a set of terminals of the same length (implied by the 
         # presence of "|" operators, and therefore alternatives), so we want to build up a MutexAlt
         # and then return it
-        visitor.on("mutexAlt") do |parse_tree|
+        visitor.on("MutexAlt") do |parse_tree|
           mutex_alt_term_parse_trees = parse_tree.captures("mutexAltTerm").map(&.as(ApplyTree))
           mutex_alts = mutex_alt_term_parse_trees.map do |apply_tree|
             rule_name = apply_tree.rule_name

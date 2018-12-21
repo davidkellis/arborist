@@ -17,6 +17,7 @@
 # from nonterminals to expressions, and we write R(A) to denote the
 # unique expression e such that (A <- e) ∈ R.
 
+require "./grammar"
 require "./parse_tree"
 require "./visitor"
 
