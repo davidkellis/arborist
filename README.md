@@ -135,9 +135,7 @@ distinction between syntactic and lexical rules.
 Syntactic rules have rule names that start with an uppercase letter.
 Lexical rules have rule names that start with a lowercase letter.
 
-Syntactic rules implicitly consumes and ignores whitespace - defined by the special `skip` rule - that occurs between the
-terms in the rule definition. ~~It is assumed that terms will be separated by at least some whitespace.~~ Syntactic rules do
-**not** consume whitespace occurring before or after the application of the syntactic rule.
+Syntactic rules implicitly consume and ignore whitespace that occurs immediately prior to any of the terms that make up the rule body. Syntactic rules do **not** consume whitespace occurring after the application of the syntactic rule.
 
 Lexical rules do not implicitly consume whitespace. Lexical rules are just standard PEG parser rules. If you need to treat
 whitespace as a significant feature in a grammar rule, then you should define the grammar rule as a lexical rule, and not
@@ -191,10 +189,15 @@ Arithmetic {
   digit
     <- "0".."9"
 
-  // The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will skip/ignore any number of
-  // matches of the `skip` rule occurring immediately prior to or immediately following any of the terms that make up the rule body.
-  // In other words, the rule `Foo <- "bar" "baz"` would match on the string "  \n\tbar      \t\t\n\n    baz \t\n "", and the
+  // The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will implicitly apply the
+  // skip rule between terms, consuming any characters matched by the skip rule.
+  // Matches of the `skip` rule occurring immediately prior to any of the terms that make up the rule body will consume input
+  // and ignore the match.
+  // For example, if the skip rule were defined as `skip <- (" " | "\n" | "\t")*`, then the following rule, 
+  // `Foo = "bar" "baz"`, would match on the string "  \n\tbar      \t\t\n\n    baz"", and the
   // whitespace in between the terms would be ignored.
+  //
+  // IMPORTANT NOTE: Due to its semantics, the skip rule should be defined as either optional or repeated 0+ times.
   skip
     <- "\u0000".." "
 }

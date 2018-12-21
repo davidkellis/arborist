@@ -7,4 +7,5 @@ Test {
   baz <- "baz"
   qux <- "qux"
   quux <- "a" | "b"
+  skip <- " "*
 }

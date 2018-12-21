@@ -134,10 +134,15 @@ module Arborist
         seq(term("\\x"), apply("hexDigit"), apply("hexDigit")).label("hexEscape"),
       )
 
-      # The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will skip/ignore any number of
-      # matches of the `skip` rule occurring immediately prior to or immediately following any of the terms that make up the rule body.
-      # In other words, the rule `Foo = "bar" "baz"` would match on the string "  \n\tbar      \t\t\n\n    baz \t\n "", and the
+      # The `skip` rule is special, in that Syntactic rules (rules named with an uppercase first letter) will implicitly apply the
+      # skip rule between terms, consuming any characters matched by the skip rule.
+      # Matches of the `skip` rule occurring immediately prior to any of the terms that make up the rule body will consume input
+      # and ignore the match.
+      # For example, if the skip rule were defined as `skip <- (" " | "\n" | "\t")*`, then the following rule, 
+      # `Foo = "bar" "baz"`, would match on the string "  \n\tbar      \t\t\n\n    baz"", and the
       # whitespace in between the terms would be ignored.
+      #
+      # IMPORTANT NOTE: Due to its semantics, the skip rule should be defined as either optional or repeated 0+ times.
       Skip = star(
         choice(
           range('\u0000'..' '),
