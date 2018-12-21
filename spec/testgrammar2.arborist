@@ -1,11 +1,11 @@
 Test {
   Start <-
     foo? bar* baz+
-    / qux
+    / cap
   foo <- "foo"
   bar <- "bar"
   baz <- "baz"
-  qux <- "qux"
-  quux <- "a" | "b"
+  cap <- "\u{41}".."\u{5A}"   // "A".."Z"
+  qux <- "a" | "b"
   skip <- " "*
 }

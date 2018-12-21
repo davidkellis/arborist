@@ -501,11 +501,12 @@ module Arborist
       end
 
       def build_string_set_from_range_rule_application_parse_tree(range_rule_body : ParseTree) : Set(String)
-        start_char_str : String = range_rule_body.capture("start_char").capture("terminalChar").text
-        end_char_str : String = range_rule_body.capture("end_char").capture("terminalChar").text
+        start_char_str : String = terminal_char_to_string(range_rule_body.capture("start_char").capture("terminalChar"))
+        end_char_str : String = terminal_char_to_string(range_rule_body.capture("end_char").capture("terminalChar"))
         start_char = start_char_str[0]
         end_char = end_char_str[0]
-        (start_char..end_char).map(&.to_s).to_set
+        retval = (start_char..end_char).map(&.to_s).to_set
+        retval
       end
 
       def build_string_set_from_terminal(terminal_rule_body : ParseTree) : Set(String)

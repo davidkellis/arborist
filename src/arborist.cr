@@ -639,11 +639,7 @@ module Arborist
     end
 
     def to_s
-      if @strings.size <= 100
-        "alt(\"#{@strings.join("|")}\")"
-      else
-        "alt(\"#{@strings.first(100).join("|")}|...\")"
-      end
+      "alt(\"#{@strings.first(100).join("|")}|...\")"
     end
   end
 
