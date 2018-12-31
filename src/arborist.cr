@@ -91,6 +91,10 @@ module Arborist
       @seed_parse_tree = nil
     end
 
+    def rule_name
+      @rule.name
+    end
+
     def inspect(io)
       io.print("#{self.class.name}:#{self.object_id} at #{@pos}: #{@rule.name} -> #{@rule.expr.to_s}")
     end
@@ -106,6 +110,8 @@ module Arborist
   end
 
   class Matcher
+    include DSL
+    
     @memoTable : Hash(Int32, Column)
     getter input : String
     property pos : Int32
@@ -179,7 +185,7 @@ module Arborist
     end
 
     def add_skip_rule_if_necessary
-      skip_expr = (@skip_expr ||= Repetition.new(MutexAlt.new( ('\u0000'..' ').map(&.to_s).to_set )) )
+      skip_expr = (@skip_expr ||= MutexAlt.new( ('\u0000'..' ').map(&.to_s).to_set ) )
       add_rule("skip", skip_expr) unless @rules.has_key?("skip")
     end
 
@@ -295,14 +301,34 @@ module Arborist
       str
     end
 
-    def apply_skip_rule
-      apply_skip = (@apply_skip ||= Apply.new("skip") )
-      apply_skip.eval(self)
+    def add_rule_if_necessary(rule_name : String, expr : Expr)
+      add_rule(rule_name, expr) unless @rules.has_key?(rule_name)
     end
 
-    def skip_whitespace_if_in_syntactic_context
+    # The application of the skip rule is internally represented as a parameterized rule, such that the skip rule is specialized
+    # for each expression that will follow. This approach made it possible implement the skip rule as:
+    # parameterized_skip_rule[following_expr] <- !following_expr skip*
+    # Eventually I concluded that implementing the skip rule as `!{following expression} skip*` was not what I wanted right now,
+    # but this establishes the pattern of implementing parameterized rules, and I may decide to go back to implementing the skip
+    # rule as `!{following expression} skip*`.
+    def apply_skip_rule(expr : Expr)
+      skip_rule_name = "__skip_prior_to_expr_#{expr.object_id}"
+
+      # skip_rule_expr = seq(star(apply("skip")), pos(expr))
+      
+      skip_rule_expr = star(apply("skip"))
+      add_rule_if_necessary(skip_rule_name, skip_rule_expr)
+      
+      apply_skip = apply(skip_rule_name)
+      # puts "skip start - #{"+" * 100}"
+      retval = apply_skip.eval(self)
+      # puts "skip end - matched #{retval.try(&.text.size)} chars - #{"-" * 100}"
+      retval
+    end
+
+    def skip_whitespace_if_in_syntactic_context(expr : Expr)
       rule_application = most_recent_rule_application
-      apply_skip_rule if rule_application && rule_application.syntactic_rule?
+      apply_skip_rule(expr) if rule_application && rule_application.syntactic_rule?
     end
 
     def most_recent_rule_application : ApplyCall?
@@ -353,8 +379,7 @@ module Arborist
 
       rule = matcher.get_rule(@rule_name)
       pos = matcher.pos
-
-      matcher.skip_whitespace_if_in_syntactic_context unless @rule_name == "skip"
+      # puts "try #{to_s} - #{rule.to_s} - rule #{rule.object_id} at #{pos}"
 
       # has this same rule been applied at the same position previously?
       previous_application_of_rule_at_pos = matcher.lookup_rule_application_in_call_stack(rule, pos)
@@ -443,8 +468,10 @@ module Arborist
               end
               pop_rule_application(matcher)
               if returning_seed_parse_tree
+                # puts "matched apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
                 return ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
               else
+                # puts "failed apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
                 return nil
               end
             end                                                             # line 24 of Algorithm 2
@@ -483,7 +510,10 @@ module Arborist
 
       pop_rule_application(matcher)
       if retval
+        # puts "matched apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
         ApplyTree.new(retval, @rule_name, matcher.input, pos, retval.finishing_pos).label(@label)
+      else
+        # puts "failed apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
       end
     end                                                                   # line 36 of Algorithm 2
 
@@ -559,9 +589,9 @@ module Arborist
     def eval(matcher) : ParseTree?
       return nil if matcher.fail_all_rules?
 
-      matcher.push_onto_call_stack(TerminalCall.new(self, matcher.pos))
+      # puts "try #{to_s} at #{matcher.pos}"
 
-      matcher.skip_whitespace_if_in_syntactic_context
+      matcher.push_onto_call_stack(TerminalCall.new(self, matcher.pos))
 
       orig_pos = matcher.pos
       terminal_matches = @str.each_char.all? do |c|
@@ -576,8 +606,10 @@ module Arborist
 
       matcher.pop_off_of_call_stack
       if terminal_matches
+        # puts "matched #{to_s} at #{orig_pos}"
         TerminalTree.new(@str, matcher.input, orig_pos, matcher.pos - 1).label(@label)
       else
+        # puts "failed #{to_s} at #{orig_pos}"
         matcher.log_match_failure(orig_pos, self)
         nil
       end
@@ -620,15 +652,17 @@ module Arborist
 
       matcher.push_onto_call_stack(MutexAltCall.new(self, matcher.pos))
 
-      matcher.skip_whitespace_if_in_syntactic_context
-
       string_length = @strings.first.size
+
+      # puts "try #{to_s} at #{matcher.pos}"
 
       orig_pos = matcher.pos
       consumed_string = matcher.consume(string_length)
       parse_tree = if consumed_string && @strings.includes?(consumed_string)
+        # puts "matched #{to_s} at #{orig_pos}"
         MutexAltTree.new(consumed_string, matcher.input, orig_pos, matcher.pos - 1).label(@label)
       else
+        # puts "failed #{to_s} at #{orig_pos}"
         matcher.pos = orig_pos
         nil
       end
@@ -726,17 +760,23 @@ module Arborist
       ans = [] of ParseTree
       start_pos = matcher.pos
 
-      @exps.each do |expr|
+      # puts "try seq #{object_id} #{to_s} at #{start_pos}"
+
+      @exps.each_with_index do |expr, term_index|
+        matcher.skip_whitespace_if_in_syntactic_context(expr) if term_index > 0
         parse_tree = expr.eval(matcher)
         if parse_tree.nil? || matcher.fail_all_rules?
           matcher.pos = start_pos
           matcher.pop_off_of_call_stack
+          # puts "failed seq #{object_id} #{to_s} at #{start_pos}"
           return nil
         end
+        # puts "#{"4" * 80} - Seq#match '#{parse_tree.text}'"
         ans.push(parse_tree) unless expr.is_a?(NegLookAhead) || expr.is_a?(PosLookAhead)
       end
 
       matcher.pop_off_of_call_stack
+      # puts "matched seq #{object_id} #{ans.map(&.text).inspect} from #{start_pos} to #{matcher.pos - 1}"
       SequenceTree.new(ans, matcher.input, start_pos, matcher.pos - 1).label(@label)
     end
 
@@ -907,8 +947,10 @@ module Arborist
       start_pos = matcher.pos
 
       ans = [] of ParseTree
+      term_count = 0
       loop do
         origPos = matcher.pos
+        matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
         parse_tree = @exp.eval(matcher)
         if parse_tree
           if matcher.fail_all_rules?
@@ -924,7 +966,9 @@ module Arborist
           end
           break
         end
+        term_count += 1
       end
+
       matcher.pop_off_of_call_stack
       RepetitionTree.new(ans, matcher.input, start_pos, matcher.pos - 1).label(@label)
     end
@@ -963,9 +1007,10 @@ module Arborist
 
       ans = [] of ParseTree
       start_pos = matcher.pos
-
+      term_count = 0
       loop do
         origPos = matcher.pos
+        matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
         parse_tree = @exp.eval(matcher)
         if parse_tree
           if matcher.fail_all_rules?
@@ -981,6 +1026,7 @@ module Arborist
           end
           break
         end
+        term_count += 1
       end
 
       matcher.pop_off_of_call_stack

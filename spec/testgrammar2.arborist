@@ -1,11 +1,14 @@
 Test {
-  Start <-
-    foo? bar* baz+
+  Start
+    <- foo? bar* baz+
     / cap
+    / "!" " "?    // since this is a syntactic rule, the last " "? will always fail to match any spaces, because the implied skip rule application between the two terms will consume all spaces between the terms, leaving nothing
+    / quux
   foo <- "foo"
   bar <- "bar"
   baz <- "baz"
   cap <- "\u{41}".."\u{5A}"   // "A".."Z"
   qux <- "a" | "b"
-  skip <- " "*
+  quux <- "@" " "?
+  skip <- " "
 }

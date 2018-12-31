@@ -18,14 +18,19 @@ describe Arborist do
     it "loads a more complicated grammar definition" do
       g = Grammar.new("spec/testgrammar2.arborist")
 
-      g.rules.size.should eq(7)
-      g.rules.keys.sort.should eq(["Start", "bar", "baz", "cap", "foo", "qux", "skip"])
+      g.rules.size.should eq(8)
+      g.rules.keys.sort.should eq(["Start", "bar", "baz", "cap", "foo", "quux", "qux", "skip"])
 
       g.parse("").should be_nil
       g.parse("blah").should be_nil
       g.parse("A").try(&.syntax_tree).should eq([["A"]])
+      g.parse("!").try(&.syntax_tree).should eq(["!"])
+      g.parse("! ").try(&.syntax_tree).should eq(["!"])
+      g.parse("!        ").try(&.syntax_tree).should eq(["!"])
+      g.parse("@").try(&.syntax_tree).should eq([["@"]])
+      g.parse("@ ").try(&.syntax_tree).should eq([["@", " "]])
       g.parse("foobarbaz").try(&.syntax_tree).should eq([["foo"], [["bar"]], [["baz"]]])
-      g.parse("  foo  bar  baz").try(&.syntax_tree).should eq([["foo"], [["bar"]], [["baz"]]])
+      g.parse("foo  bar  baz").try(&.syntax_tree).should eq([["foo"], [["bar"]], [["baz"]]])
     end
   end
 

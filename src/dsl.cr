@@ -46,10 +46,6 @@ module Arborist
       Choice.new(alternatives)
     end
 
-    def skip : Expr
-      star(apply("skip")).label("__skip__")
-    end
-
     def apply(rule_name : String) : Expr
       Apply.new(rule_name)
     end
