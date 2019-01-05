@@ -346,7 +346,24 @@ module Arborist
         end
 
         visitor.on("Seq") do |parse_tree|
+          # todo: I'm considering changing my mind on this. I need to decide which way is more appropriate.
+
+          # originally, we wrapped all children in a Sequence node
           seq(parse_tree.captures("Pred").map(&.visit(visitor).as(Expr)))
+
+          # I'm considering changing my mind on this; here, we wrap all children in a Sequence node unless there is only one child node, 
+          # in which case we just return the child node un-wrapped so that if a top-level alternative is an apply node and 
+          # a label is applied to the top-level alternative, then the apply node itself will be labeled, which makes it
+          # possible to visit the apply node like `node.capture("alternative-name").visit(...)` instead of having to 
+          # navigate to it and visit it like `node.capture("alternative-name").capture("alternative-name").visit(...)`
+          # This behavior is more intuitive - it's what I was expecting when I had an alternative that consisted only
+          # of an application of another rule.
+          # pred_nodes = parse_tree.captures("Pred")
+          # if pred_nodes.size == 1
+          #   pred_nodes.first.visit(visitor).as(Expr)    # we don't wrap a single child node in a Sequence node so as to allow labels applied to top-level alternatives that are apply nodes 
+          # else # pred_nodes.size == 0 || pred_nodes.size > 1
+          #   seq(parse_tree.captures("Pred").map(&.visit(visitor).as(Expr)))
+          # end 
         end
 
         visitor.on("Pred_neg") do |parse_tree|
