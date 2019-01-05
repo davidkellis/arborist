@@ -334,7 +334,7 @@ module Arborist
         end
 
         visitor.on("TopLevelTerm_inline") do |parse_tree|
-          label_name = parse_tree.capture("caseName").text
+          label_name = parse_tree.capture("caseName").capture("name").text
           parse_tree.capture("Seq").visit(visitor).as(Expr).label(label_name)
         end
         visitor.on("TopLevelTerm_seq") do |parse_tree|
