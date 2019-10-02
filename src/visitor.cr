@@ -21,13 +21,14 @@ module Arborist
       # Keep in mind that a ChoiceTree will only represent one alternative taken from the top-level alternatives defined 
       # in the corresponding Choice object that created this ChoiceTree. The Choice object actually represents the different
       # top-level alternative expressions. The ChoiceTree only represents one of those realized top-level alternatives.
-      if apply_node.tree.is_a?(ChoiceTree) && apply_node.tree.child?.try(&.labeled?)
-        visitor_function_name = "#{apply_node.rule_name}_#{apply_node.tree.child.label}"
+      choice_tree = apply_node.tree.as?(ChoiceTree)
+      if choice_tree && choice_tree.tree.labeled?
+        visitor_function_name = "#{apply_node.rule_name}_#{choice_tree.tree.label}"
         visitor_fn = @visitors[visitor_function_name]? || raise "No visitor function defined for rule \"#{visitor_function_name}\""
         return visitor_fn.call(apply_node)
       end
 
-      raise "No visitor function defined for rule \"#{apply_node.rule_name}\""
+      raise "No visitor function defined for rule \"#{apply_node.rule_name}\". \nroot = \n#{apply_node.root.s_exp} \n\n\n\napply_node.s_exp = \n#{apply_node.s_exp}"
     end
   end
 end

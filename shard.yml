@@ -1,10 +1,10 @@
 name: arborist
-version: 0.1.0
-crystal: 0.27.0
+version: 0.2.0
+crystal: 0.31.0
 license: MIT
 
 authors:
-  - david.ellis <david.ellis@rackspace.com>
+  - david.ellis <david@conquerthelawn.com>
 
 targets:
   arborist:

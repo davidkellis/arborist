@@ -114,6 +114,13 @@ module Arborist
       !!@label
     end
 
+    def set_label(@label)
+    end
+
+    # def capture_name
+    #   @label || (self.is_a?(ApplyTree) && self.rule_name) || raise("ParseTree node `#{self.s_exp}` has no #capture_name.")
+    # end
+
     # returns the name of the rule that, as a result of being evaluated, yielded this parse tree node
     def enclosing_rule_name : String?
       parent = parent()
@@ -134,6 +141,15 @@ module Arborist
       @parent.nil?
     end
 
+    def root
+      parent = @parent
+      if parent
+        parent.root
+      else
+        self
+      end
+    end
+
     def preorder_traverse(visit : ParseTree -> _)
       visit.call(self)
       children.each {|child| child.preorder_traverse(visit) }
@@ -147,6 +163,11 @@ module Arborist
       children.each {|child| child.postorder_traverse(visit) }
       visit.call(self)
     end
+
+    # def capture() : ParseTree
+    #   raise "ParseTree#capture may not be used when there are multiple captures. The use of #capture in this context is ambiguous." unless captures.size == 1 && captures.first_value.size == 1
+    #   captures.first_value.first
+    # end
 
     def capture(name : String) : ParseTree
       capture?(name) || raise("Unknown capture reference: #{name}")
@@ -470,11 +491,11 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       tree = @tree
+      prefix = " " * indent
       if tree
-        prefix = " " * indent
         "#{prefix}(opt ; id=#{object_id} label=\"#{label}\"\n#{tree.s_exp(indent+2)})"
       else
-        ""
+        "#{prefix}(opt ; none)"
       end
     end
 
