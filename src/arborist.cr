@@ -22,6 +22,68 @@ require "./parse_tree"
 require "./visitor"
 
 module Arborist
+  class MemoTree
+    # stores the memoized parse trees that occur in the rule-in-recursion call stack state represented by this MemoTree node
+    property memo_table : Hash(Int32, Column)
+
+    # stores memoization tables for ApplyCalls that occur in a more specific rule-in-recursion call stack state than is represented by this MemoTree node
+    # The tuple representing the key is of the form: {pos, rule_name}
+    property children : Hash({Int32, String}, MemoTree)
+
+    def initialize()
+      @memo_table = {} of Int32 => Column
+      @children = {} of {Int32, String} => MemoTree
+    end
+
+    def lookup(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : MemoResult?
+      # tree_node = lookup_tree_node(rule_in_recursion_call_stack_state)
+      # if tree_node
+      #   memo_table = tree_node.memo_table
+      #   col = memo_table[pos]?
+      #   col[rule_name]? if col
+      # end
+
+      tree_node = self
+      memo_table = tree_node.memo_table
+      col = memo_table[pos]?
+      memo_result = col[rule_name]? if col
+      return memo_result if memo_result
+
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        if tree_node.children.has_key?(pos_rule_name_pair)
+          tree_node = tree_node.children[pos_rule_name_pair]
+          memo_table = tree_node.memo_table
+          col = memo_table[pos]?
+          memo_result = col[rule_name]? if col
+          return memo_result if memo_result
+        else
+          return nil
+        end
+      end
+    end
+
+    def add(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
+      tree_node = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        tree_node = (tree_node.children[pos_rule_name_pair] ||= MemoTree.new)
+      end
+
+      memo_table = tree_node.memo_table
+      col = (memo_table[pos] ||= {} of String => MemoResult)
+      col[rule_name] = memo_result
+    end
+
+    private def lookup_tree_node(rule_in_recursion_call_stack_state : Array({Int32, String})) : MemoTree?
+      tree_node = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        child = tree_node.children[pos_rule_name_pair]?
+        return nil unless child
+        tree_node = child
+      end
+      tree_node
+    end
+  end
+
   class MemoResult
     property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
     property next_pos : Int32
@@ -112,7 +174,8 @@ module Arborist
   class Matcher
     include DSL
     
-    @memoTable : Hash(Int32, Column)
+    # @memoTable : Hash(Int32, Column)
+    @memo_tree : MemoTree
     getter input : String
     property pos : Int32
     getter rules : Hash(String, Rule)
@@ -131,7 +194,8 @@ module Arborist
       @expr_failures = {} of Int32 => Set(Expr)
 
       @input = ""
-      @memoTable = {} of Int32 => Column
+      # @memoTable = {} of Int32 => Column
+      @memo_tree = MemoTree.new
       @pos = 0
     end
 
@@ -167,7 +231,8 @@ module Arborist
     # So, we want to initialize the growing map just prior to using it, since that will be the only point that we know for sure that
     # all of the rules have been added to the matcher.
     def prepare_for_matching
-      @memoTable = {} of Int32 => Column
+      # @memoTable = {} of Int32 => Column
+      @memo_tree = MemoTree.new
 
       @pos = 0
 
@@ -213,11 +278,6 @@ module Arborist
       nil
     end
 
-    def any_left_recursion_ongoing? : Bool
-      apply_calls = @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) }.map(&.as(ApplyCall))
-      apply_calls.any?(&.left_recursive?)
-    end
-
     def log_match_failure(pos : Int32, expr : Expr) : Nil
       failures = (@expr_failures[pos] ||= Set(Expr).new)
       failures << expr
@@ -259,21 +319,42 @@ module Arborist
     end
 
     def has_memoized_result?(rule_name) : Bool
-      col = @memoTable[@pos]?
-      !!col && col.has_key?(rule_name)
+      !!@memo_tree.lookup(rule_in_recursion_call_stack_state, @pos, rule_name)
+      # col = @memoTable[@pos]?
+      # !!col && col.has_key?(rule_name)
     end
 
-    def memoize_result(pos, next_pos, rule_name, parse_tree : ParseTree?)
-      col = (@memoTable[pos] ||= {} of String => MemoResult)
-      col[rule_name] = MemoResult.new(parse_tree, next_pos)
+    def memoize_result(pos, next_pos, rule_name, parse_tree : ParseTree?) : MemoResult
+      @memo_tree.add(rule_in_recursion_call_stack_state, pos, rule_name, MemoResult.new(parse_tree, next_pos))
+      # col = (@memoTable[pos] ||= {} of String => MemoResult)
+      # col[rule_name] = MemoResult.new(parse_tree, next_pos)
     end
 
     def use_memoized_result(rule_name) : ParseTree?
-      col = @memoTable[@pos]
-      memo_result = col[rule_name]
-      @pos = memo_result.next_pos
-      memo_result.parse_tree
+      memo_result = @memo_tree.lookup(rule_in_recursion_call_stack_state, @pos, rule_name)
+      if memo_result
+        @pos = memo_result.next_pos
+        memo_result.parse_tree
+      end
+      # col = @memoTable[@pos]
+      # memo_result = col[rule_name]
+      # @pos = memo_result.next_pos
+      # memo_result.parse_tree
     end
+
+    def left_recursive_apply_calls : Array(ApplyCall)
+      @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.left_recursive? }.map(&.as(ApplyCall))
+    end
+
+    # returns an array of pairs of the form {pos, rule_name}, each summarizing an ApplyCall
+    def rule_in_recursion_call_stack_state : Array({Int32, String})
+      left_recursive_apply_calls.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
+    end
+
+    # def any_left_recursion_ongoing? : Bool
+    #   apply_calls = @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) }.map(&.as(ApplyCall))
+    #   apply_calls.any?(&.left_recursive?)
+    # end
 
     def eof?
       @pos >= @input.size
@@ -517,6 +598,7 @@ module Arborist
           traditional_rule_application(matcher, current_rule_application)   # line 33 of Algorithm 2
         end                                                                 # line 35 of Algorithm 2
 
+        # todo: do we need to move this to the end, since later logic depends on the call stack having this recursive call in it?
         pop_rule_application(matcher)
 
         apply_parse_tree = if parse_tree_from_rule_expr
@@ -524,15 +606,17 @@ module Arborist
           ApplyTree.new(parse_tree_from_rule_expr, @rule_name, matcher.input, pos, parse_tree_from_rule_expr.finishing_pos).label(@label)
         end
 
-        # we want to memoize apply_parse_tree for the current rule at the current position if this parse tree is the result of
-        # a non-recursive (i.e. top-most) application of the rule. We don't want to memoize recursive parse trees, as they are
-        # only intermediate values that may be built-up further via the seed-growing mechanism. Once seed growth is complete
-        # and we produce a final parse tree, that is the one we want to memoize.
-        # if !is_this_application_left_recursive_at_pos && !is_rule_in_left_recursion_anywhere
-        if !matcher.any_left_recursion_ongoing?
+        # the aggregate state of the rules on the call stack that are in currently in recursion constitute a memoization context - parse
+        # trees resulting from rule applications within the same context may be memoized and read from the memoization cache, but once
+        # the context changes, then any reads must be taken from the part of the cache that corresponds to the rule-in-recursion stack state
+        # at which the rule application is being made.
+        #
+        # we want to memoize apply_parse_tree for the current rule at the current position within the context of the current rule-in-recursion
+        # call stack
+        # if !matcher.any_left_recursion_ongoing?
           # matcher.memoize_result(pos, apply_parse_tree.finishing_pos + 1, @rule_name, apply_parse_tree)
           matcher.memoize_result(pos, matcher.pos, @rule_name, apply_parse_tree)
-        end
+        # end
 
         apply_parse_tree
 
