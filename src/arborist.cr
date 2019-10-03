@@ -522,25 +522,6 @@ module Arborist
         apply_parse_tree = if parse_tree_from_rule_expr
           # puts "matched apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
           ApplyTree.new(parse_tree_from_rule_expr, @rule_name, matcher.input, pos, parse_tree_from_rule_expr.finishing_pos).label(@label)
-
-        # todo: clean this up at a later point in time if everything continues to work as expected
-        #   # we want to memoize final_parse_tree for the current rule at the current position if this parse tree is the result of
-        #   # a non-recursive (i.e. top-most) application of the rule. We don't want to memoize recursive parse trees, as they are
-        #   # only intermediate values that may be built-up further via the seed-growing mechanism. Once seed growth is complete
-        #   # and we produce a final parse tree, that is the one we want to memoize.
-        #   # if !is_this_application_left_recursive_at_pos && !is_rule_in_left_recursion_anywhere
-        #   if !matcher.any_left_recursion_ongoing?
-        #     # matcher.memoize_result(pos, final_parse_tree.finishing_pos + 1, @rule_name, final_parse_tree)
-        #     matcher.memoize_result(pos, matcher.pos, @rule_name, final_parse_tree)
-        #   end
-
-        #   final_parse_tree
-        # else
-        #   if !matcher.any_left_recursion_ongoing?
-        #     matcher.memoize_result(pos, pos, @rule_name, nil)
-        #   end
-        #   nil
-        #   # puts "failed apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
         end
 
         # we want to memoize apply_parse_tree for the current rule at the current position if this parse tree is the result of
