@@ -22,6 +22,17 @@ require "./parse_tree"
 require "./visitor"
 
 module Arborist
+  class MemoResult
+    property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
+    property next_pos : Int32
+
+    def initialize(@parse_tree = nil, @next_pos = 0)
+    end
+  end
+
+  # Column is a Map from rule_name => memoized-parse-tree-with-next-pos-state
+  alias Column = Hash(String, MemoResult)
+
   class MemoTree
     # stores the memoized parse trees that occur in the rule-in-recursion call stack state represented by this MemoTree node
     property memo_table : Hash(Int32, Column)
@@ -35,7 +46,38 @@ module Arborist
       @children = {} of {Int32, String} => MemoTree
     end
 
+    def clone()
+      mt = MemoTree.new
+      self.memo_table.each do |pos, col|
+        mt.memo_table[pos] = col.dup    # shallow copy of Column
+      end
+      mt
+    end
+
+    def exist?(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : Bool
+      tree_node : MemoTree = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        tree_node = tree_node.children[pos_rule_name_pair]? || (return false)
+      end
+
+      tree_node.local_exist?(pos, rule_name)
+    end
+
+    def local_exist?(pos : Int32, rule_name : String) : Bool
+      col = self.memo_table[pos]?
+      (col && col.has_key?(rule_name)) || false
+    end
+
     def lookup(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : MemoResult?
+      tree_node : MemoTree = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        tree_node = tree_node.children[pos_rule_name_pair]? || (return nil)
+      end
+      memo_table = tree_node.memo_table
+      col = memo_table[pos]?
+      col[rule_name]? if col
+
+
       # tree_node = lookup_tree_node(rule_in_recursion_call_stack_state)
       # if tree_node
       #   memo_table = tree_node.memo_table
@@ -43,33 +85,43 @@ module Arborist
       #   col[rule_name]? if col
       # end
 
-      tree_node = self
-      memo_table = tree_node.memo_table
-      col = memo_table[pos]?
-      memo_result = col[rule_name]? if col
-      return memo_result if memo_result
 
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        if tree_node.children.has_key?(pos_rule_name_pair)
-          tree_node = tree_node.children[pos_rule_name_pair]
-          memo_table = tree_node.memo_table
-          col = memo_table[pos]?
-          memo_result = col[rule_name]? if col
-          return memo_result if memo_result
-        else
-          return nil
-        end
-      end
+      # tree_node = self
+      # memo_table = tree_node.memo_table
+      # col = memo_table[pos]?
+      # memo_result = col[rule_name]? if col
+      # return memo_result if memo_result
+
+      # rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+      #   if tree_node.children.has_key?(pos_rule_name_pair)
+      #     tree_node = tree_node.children[pos_rule_name_pair]
+      #     memo_table = tree_node.memo_table
+      #     col = memo_table[pos]?
+      #     memo_result = col[rule_name]? if col
+      #     return memo_result if memo_result
+      #   else
+      #     return nil
+      #   end
+      # end
     end
+
+    def local_lookup(pos : Int32, rule_name : String) : MemoResult
+      self.memo_table[pos][rule_name]
+    end
+
 
     def add(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
       tree_node = self
       rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        tree_node = (tree_node.children[pos_rule_name_pair] ||= MemoTree.new)
+        tree_node = (tree_node.children[pos_rule_name_pair] ||= tree_node.clone)
       end
 
-      memo_table = tree_node.memo_table
-      col = (memo_table[pos] ||= {} of String => MemoResult)
+      tree_node.local_memoize(pos, rule_name, memo_result)
+    end
+
+    def local_memoize(pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
+      memo_table = self.memo_table
+      col = (memo_table[pos] ||= Column.new)
       col[rule_name] = memo_result
     end
 
@@ -83,16 +135,6 @@ module Arborist
       tree_node
     end
   end
-
-  class MemoResult
-    property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
-    property next_pos : Int32
-
-    def initialize(@parse_tree = nil, @next_pos = 0)
-    end
-  end
-
-  alias Column = Hash(String, MemoResult)
 
   class Rule
     getter matcher : Matcher
@@ -319,7 +361,7 @@ module Arborist
     end
 
     def has_memoized_result?(rule_name) : Bool
-      !!@memo_tree.lookup(rule_in_recursion_call_stack_state, @pos, rule_name)
+      @memo_tree.exist?(rule_in_recursion_call_stack_state, @pos, rule_name)
       # col = @memoTable[@pos]?
       # !!col && col.has_key?(rule_name)
     end
@@ -488,6 +530,8 @@ module Arborist
 
         current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
 
+        this_rule_application_may_be_memoized = false
+
         parse_tree_from_rule_expr = if is_rule_in_left_recursion_at_current_position             # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
           seed_parse_tree = matcher.growing[rule][pos]
           if seed_parse_tree
@@ -571,7 +615,6 @@ module Arborist
             # otherwise, we are starting a deeper level seed growth, and we only want the seed to grow so long as it doesn't grow
             # by means of further left-recursion; so, we need to start a new seed growth with a nil seed, but we are never going
             # to update the seed, thereby ensuring that any any further left-recursion on `rule` at `pos` fails
-
             matcher.growing[rule][pos] = nil                                  # line 17 of Algorithm 2
 
             matcher.pos = pos
@@ -595,6 +638,8 @@ module Arborist
 
           end
         else                                                                # line 27 of Algorithm 2
+          # this is the only branch not involved in growing a seed in the current rule application
+          this_rule_application_may_be_memoized = true
           traditional_rule_application(matcher, current_rule_application)   # line 33 of Algorithm 2
         end                                                                 # line 35 of Algorithm 2
 
@@ -615,7 +660,7 @@ module Arborist
         # call stack
         # if !matcher.any_left_recursion_ongoing?
           # matcher.memoize_result(pos, apply_parse_tree.finishing_pos + 1, @rule_name, apply_parse_tree)
-          matcher.memoize_result(pos, matcher.pos, @rule_name, apply_parse_tree)
+          matcher.memoize_result(pos, matcher.pos, @rule_name, apply_parse_tree) if this_rule_application_may_be_memoized
         # end
 
         apply_parse_tree

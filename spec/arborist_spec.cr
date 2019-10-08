@@ -158,7 +158,7 @@ describe Arborist do
   describe "left-recursion support" do
     it "rejects left recursive rules that would never backtrack to an alternate branch if the left recursive application fails" do
       expr = seq(apply("expr"), term("-"), apply("num"))    # expr -> expr - num
-      num = plus(range('0'..'9'))                                     # num -> [0-9]+
+      num = plus(range('0'..'9'))                           # num -> [0-9]+
       m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
       m1.match("1-2-3", "expr").should be_nil
@@ -166,7 +166,7 @@ describe Arborist do
 
     it "allows rules that are left-recursion and not right-recursive" do
       expr = choice(seq(apply("expr"), term("-"), apply("num")), apply("num"))    # expr -> expr - num | num
-      num = plus(range('0'..'9'))                                                                       # num -> [0-9]+
+      num = plus(range('0'..'9'))                                                 # num -> [0-9]+
       m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
       m1.match("1-2-3", "expr").try(&.syntax_tree).should eq [[["1"], "-", ["2"]], "-", ["3"]]   # should parse as (((1)-2)-3)
@@ -183,7 +183,7 @@ describe Arborist do
 
     it "allows rules that are right-recursive and not left-recursive" do
       expr = choice(seq(apply("num"), term("-"), apply("expr")), apply("num"))    # expr -> expr - num | num
-      num = plus(range('0'..'9'))                                                                       # num -> [0-9]+
+      num = plus(range('0'..'9'))                                                 # num -> [0-9]+
       m1 = Matcher.new.add_rule("expr", expr).add_rule("num", num)
 
       m1.match("1-2-3", "expr").try(&.syntax_tree).should eq [["1"], "-", [["2"], "-", ["3"]]]   # should parse as (1-(2-(3))
