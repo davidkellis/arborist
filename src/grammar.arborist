@@ -125,7 +125,7 @@ Arborist {
     / comment
 
   comment
-    <- "//" (!"\n" .)* "\n"  -- singleLine
+    <- ("//" / "#") (!"\n" .)* "\n"  -- singleLine
     / "/*" (!"*/" .)* "*/"  -- multiLine
 
   alnum

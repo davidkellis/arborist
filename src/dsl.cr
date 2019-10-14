@@ -59,7 +59,10 @@ module Arborist
     def dot(alphabet = ALPHABET) : Expr
       # terms = alphabet.map {|char| term(char.to_s).as(Expr) }
       # choice(terms)
-      alt(alphabet)
+
+      # alt(alphabet)
+
+      Dot.new
     end
 
     def seq(*exprs) : Expr

@@ -51,19 +51,6 @@ module Arborist
         apply("Base").label("base")
       )
 
-      # MutexAlt = choice(
-      #   seq(apply("Base"), star(seq(term("|"), apply("Base")))).label("alts"),
-      #   apply("Base").label("base")
-      # )
-
-      # # Lex
-      # #   = "#" Base  -- lex
-      # #   / Base
-      # Lex = choice(
-      #   seq(term("#"), apply("Base")).label("lex"),
-      #   apply("Base"),
-      # )
-
       Base = choice(
         apply("MutexAlt").label("mutexAlt"),
         seq(apply("ident"), neg(term("<-")), neg(term("="))).label("application"),
@@ -151,10 +138,10 @@ module Arborist
       )
 
       # comment
-      #   = "//" (!"\n" dot)* "\n"  -- singleLine
+      #   = ("//" / "#") (!"\n" dot)* "\n"  -- singleLine
       #   / "/*" (!"*/" dot)* "*/"  -- multiLine
       Comment = choice(
-        seq(term("//"), star(seq(neg(term("\n")), dot)), term("\n")).label("singleLine"),
+        seq(choice(term("//"), term("#")), star(seq(neg(term("\n")), dot)), term("\n")).label("singleLine"),
         seq(term("/*"), star(seq(neg(term("*/")), dot)), term("*/")).label("multiLine")
       )
 

@@ -465,7 +465,7 @@ module Arborist
   end
 
 
-  alias Expr = Apply | Terminal | MutexAlt | Choice | Sequence | NegLookAhead | PosLookAhead | Optional | Repetition | RepetitionOnePlus
+  alias Expr = Apply | Terminal | MutexAlt | Dot | Choice | Sequence | NegLookAhead | PosLookAhead | Optional | Repetition | RepetitionOnePlus
 
   # Apply represents the application of a named rule
   class Apply
@@ -708,6 +708,52 @@ module Arborist
 
     def to_s
       "apply(#{@rule_name})"
+    end
+  end
+
+  # Match any single character
+  class Dot
+    property label : String?
+
+    def label(label : String) : Dot
+      @label = label
+      self
+    end
+
+    def preorder_traverse(matcher, visit : Expr -> _, visited_nodes : Set(Expr))
+      return if visited_nodes.includes?(self)
+      visited_nodes << self
+      visit.call(self)
+    end
+
+    # returns String | Nil
+    def eval(matcher) : ParseTree?
+      return nil if matcher.fail_all_rules?
+
+      matcher.push_onto_call_stack(TerminalCall.new(self, matcher.pos))
+
+      orig_pos = matcher.pos
+      if matcher.eof?
+        matcher.pos = orig_pos
+        matcher.pop_off_of_call_stack
+        matcher.log_match_failure(orig_pos, self)
+        return nil
+      end
+      consumed_str = matcher.consume(1)
+
+      matcher.pop_off_of_call_stack
+      if consumed_str
+        # puts "matched #{to_s} at #{orig_pos}"
+        TerminalTree.new(consumed_str, matcher.input, orig_pos, matcher.pos - 1).label(@label)
+      else
+        # puts "failed #{to_s} at #{orig_pos}"
+        matcher.log_match_failure(orig_pos, self)
+        nil
+      end
+    end
+
+    def to_s
+      "dot"
     end
   end
 
