@@ -1,6 +1,4 @@
 module Arborist
-  ALPHABET = ((' '..'~').map(&.to_s) + ["\n"] + ["\t"]).to_set
-
   module DSL
     def label(label : String, expr : Expr) : Expr
       expr.label(label)
@@ -56,12 +54,7 @@ module Arborist
       alt(chars.map(&.to_s))
     end
 
-    def dot(alphabet = ALPHABET) : Expr
-      # terms = alphabet.map {|char| term(char.to_s).as(Expr) }
-      # choice(terms)
-
-      # alt(alphabet)
-
+    def dot() : Expr
       Dot.new
     end
 

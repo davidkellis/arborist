@@ -231,7 +231,7 @@ describe Arborist do
     pending "never matches any phrase for the rule: a = !a 'b' ; see https://github.com/harc/ohm/issues/120" do
       # a -> !a "b"
       # This rule is paradoxical - a is defined to recognize a string that is not prefixed with itself, therefore, it can't
-      # recognize any string; however, if a can't recognize anything, then by failing to recognize anything, `!e` succeeds,
+      # recognize any string; however, if a can't recognize anything, then by failing to recognize anything, `!a` succeeds,
       # which then allows `a` to match the "b" terminal when the input string is "b". But then if a can recognize "b", 
       # then `!a` should prevent `a` from matching the "b" terminal, resulting in `a` not being able to recognize anything.
       # So, which is it?

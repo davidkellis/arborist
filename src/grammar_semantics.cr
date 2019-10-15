@@ -7,14 +7,11 @@ module Arborist
       include Arborist::DSL
 
       @rule_name_to_parse_tree_map : Hash(String, ParseTree) = {} of String => ParseTree
-      # @parse_tree_to_mutex_alt_map : Hash(ParseTree, MutexAlt?) = {} of ParseTree => MutexAlt?
 
       # takes a parse tree for an Arborist grammar definition and returns a Matcher that can build parse
       # trees for that grammar definition
       def build_grammar_parser(grammar_parse_tree : ApplyTree) : Matcher
         @rule_name_to_parse_tree_map = build_rule_name_to_parse_tree_map(grammar_parse_tree)
-        # @parse_tree_to_mutex_alt_map = Hash(ParseTree, MutexAlt?).new
-        # @parse_tree_to_mutex_alt_map = build_parse_tree_to_mutex_alt_map(grammar_parse_tree)   # older
         build_parser_for_grammar(grammar_parse_tree)
       end
 
@@ -44,35 +41,7 @@ module Arborist
         visitor.visit(parse_tree)   # return the rule-name -> rule-body-parse-tree pairs
       end
 
-      # def build_parse_tree_to_mutex_alt_map(parse_tree : ParseTree) : Hash(ParseTree, MutexAlt?)
-      #   @parse_tree_to_mutex_alt_map = Hash(ParseTree, MutexAlt?).new
-      #   parse_tree.postorder_traverse(->(pt : ParseTree) {
-      #     if pt.is_a?(ApplyTree)
-      #       parse_tree_for_rule = pt.child
-      #       @parse_tree_to_mutex_alt_map[pt] = build_mutex_alt_for_rule_parse_tree(pt.rule_name, parse_tree_for_rule, @rule_name_to_parse_tree_map)
-      #     end
-      #   })
-      #   @parse_tree_to_mutex_alt_map
-      # end
-
-      # # returns a MutexAlt if the rule can be represented as a MutexAlt; nil otherwise
-      # def build_mutex_alt_for_rule_name(rule_name : String, rule_name_to_parse_tree_map : Hash(String, ParseTree)) : MutexAlt?
-      #   # to identify parse tree nodes that can represent a MutexAlt:
-      #   # 1. find the transitive closure of every node in the parse tree
-      #   # 2. for each node, ensure that all the nodes in that node's transitive closure are reducible to a MutexAlt
-      #   # 3. for each node from (2) that is reducible to a MutexAlt, build a MutexAlt for that node and store 
-      #   #    it in a Parse Tree Node -> MutexAlt map
-
-      #   # to do this:
-      #   # walk the rule parse trees, following rule applications, building up a set of string literals
-      #   # if at any point you encounter a rule that would imply it can't be represented as a mutexalt, then raise
-      #   parse_tree = rule_name_to_parse_tree_map[rule_name]
-      #   strings = build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, Set(ParseTree).new, Set(String).new)
-      #   MutexAlt.new(strings) if is_mutex_alt_string_set_valid?(strings)
-      # rescue MutexAltBuildFailure
-      #   nil
-      # end
-
+      # returns a MutexAlt if the rule can be represented as a MutexAlt, or a Dot if the rule represents any character; nil otherwise
       # `rule_name` is the name of the rule that, as a result of being evaluated, yielded the `parse_tree` node.
       # In other words, `rule_name` was the name of the rule that was actively being matched and produced a parse tree that
       # included the parse tree node represented by `parse_tree`.
@@ -237,7 +206,6 @@ module Arborist
             alt = parse_tree.capture("Alt")
             build_mutex_alt_string_set_for_rule_parse_tree(alt.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "dot"
-            # add_to_mutex_alt_set(strings, ALPHABET)
             Dot.new
           else
             raise "Unreachable branch!"
@@ -263,7 +231,6 @@ module Arborist
             terminal = parse_tree.capture("terminal")
             build_mutex_alt_string_set_for_rule_parse_tree(terminal.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "dot"
-            # add_to_mutex_alt_set(strings, ALPHABET)
             Dot.new
           else
             raise "Unreachable branch!"
@@ -384,19 +351,6 @@ module Arborist
           parse_tree.capture("base").visit(visitor)
         end
 
-        # If a MutexAlt application represents a set of terminals of the same length (implied by the 
-        # presence of "|" operators, and therefore alternatives) ...
-        # (case 1) ... then we want to return a MutexAlt,
-        # visitor.on("MutexAlt_alts") do |parse_tree|
-        #   base_apply_trees = parse_tree.captures("Base").map(&.as(ApplyTree))
-        #   string_alts = get_mutex_alt_arguments_from_rule_applications(visitor, base_apply_trees)
-        #   alt(string_alts)
-        # end
-        # # (case 2) ...otherwise we want to fall through to the wrapped rules
-        # visitor.on("MutexAlt_base") do |parse_tree|
-        #   parse_tree.capture("base").visit(visitor)
-        # end
-
         visitor.on("Base_mutexAlt") do |parse_tree|
           parse_tree.capture("mutexAlt").visit(visitor)
         end
@@ -444,12 +398,6 @@ module Arborist
         end
 
         visitor.on("range") do |parse_tree|
-          # start_char_str : String = range.capture("start_char").capture("terminalChar").visit(visitor).as(String)
-          # end_char_str : String = range.capture("end_char").capture("terminalChar").visit(visitor).as(String)
-          # start_char = start_char_str[0]
-          # end_char = end_char_str[0]
-          # range(start_char..end_char)
-          # build_mutex_alt_expr_from_range_rule_application_parse_tree(parse_tree)
           string_set = build_string_set_from_range_rule_application_parse_tree(parse_tree)
           alt(string_set)
         end
