@@ -79,7 +79,7 @@ module Arborist
       # `parse_tree` is the first (and only) child of an ApplyTree node.
       # Returns a MutexAlt if the parse tree can be represented as a MutexAlt; nil otherwise
       def build_mutex_alt_for_rule_parse_tree(rule_name : String, parse_tree : ParseTree, rule_name_to_parse_tree_map : Hash(String, ParseTree)) : (MutexAlt | Dot)?
-        strings_or_dot = build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, Set(ParseTree).new)
+        strings_or_dot = build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, Set(ParseTree).new, Set(String).new)
         case strings_or_dot
         when Set(String)
           MutexAlt.new(strings_or_dot) if is_mutex_alt_string_set_valid?(strings_or_dot)
@@ -111,20 +111,21 @@ module Arborist
       #   end
       #   strings_or_dot
       # end
-      # def add_to_mutex_alt_set(strings_or_dot : Set(String) | Dot, new_strings : Set(String)) : Set(String) | Dot
-      #   # new_strings.each {|new_string| add_to_mutex_alt_set(strings, new_string) }
-      #   if strings_or_dot.is_a?(Set(String))
-      #     strings_or_dot.concat(new_strings)
-      #   end
-      #   strings_or_dot
-      # end
+      def add_to_mutex_alt_set(strings_or_dot : Set(String) | Dot, new_strings : Set(String)) : Set(String) | Dot
+        # new_strings.each {|new_string| add_to_mutex_alt_set(strings, new_string) }
+        if strings_or_dot.is_a?(Set(String))
+          strings_or_dot.concat(new_strings)
+        end
+        strings_or_dot
+      end
 
 
       def build_mutex_alt_string_set_for_rule_parse_tree(apply_tree : ApplyTree, 
                                               rule_name_to_parse_tree_map : Hash(String, ParseTree), 
                                               visited_nodes : Set(ParseTree),
+                                              string_set_union : Set(String) | Dot
                                               ) : Set(String) | Dot
-        build_mutex_alt_string_set_for_rule_parse_tree(apply_tree.rule_name, apply_tree.child, rule_name_to_parse_tree_map, visited_nodes)
+        build_mutex_alt_string_set_for_rule_parse_tree(apply_tree.rule_name, apply_tree.child, rule_name_to_parse_tree_map, visited_nodes, string_set_union)
       end
 
       # `parse_tree` is the first (and only) child of an ApplyTree node - it is the root tree node of a rule definition
@@ -132,8 +133,9 @@ module Arborist
                                               parse_tree : ParseTree, 
                                               rule_name_to_parse_tree_map : Hash(String, ParseTree), 
                                               visited_nodes : Set(ParseTree),
+                                              string_set_union : Set(String) | Dot
                                               ) : Set(String) | Dot
-        return Set(String).new if visited_nodes.includes?(parse_tree)
+        return string_set_union if visited_nodes.includes?(parse_tree)
 
         visited_nodes << parse_tree
 
@@ -145,7 +147,7 @@ module Arborist
         when "RuleBody"
           top_level_terms = parse_tree.captures("TopLevelTerm")
           if top_level_terms.size == 1
-            build_mutex_alt_string_set_for_rule_parse_tree(top_level_terms.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(top_level_terms.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           elsif top_level_terms.size > 1
             raise MutexAltBuildFailure.new("RuleBody rule has too many alternatives; it can only have one.")
           else
@@ -158,11 +160,11 @@ module Arborist
           when "seq"
             parse_tree.capture("seq")
           end
-          build_mutex_alt_string_set_for_rule_parse_tree(seq.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+          build_mutex_alt_string_set_for_rule_parse_tree(seq.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
         when "Alt"
           seq_nodes = parse_tree.captures("Seq")
           if seq_nodes.size == 1
-            build_mutex_alt_string_set_for_rule_parse_tree(seq_nodes.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(seq_nodes.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           elsif seq_nodes.size > 1
             raise MutexAltBuildFailure.new("Alt rule has too many alternatives; it can only have one.")
           else
@@ -171,7 +173,7 @@ module Arborist
         when "Seq"
           pred_nodes = parse_tree.captures("Pred")
           if pred_nodes.size == 1
-            build_mutex_alt_string_set_for_rule_parse_tree(pred_nodes.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(pred_nodes.first.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           elsif pred_nodes.size > 1
             raise MutexAltBuildFailure.new("Seq rule has many terms")
           #elsif pred_nodes.size == 0
@@ -187,7 +189,7 @@ module Arborist
             raise MutexAltBuildFailure.new("Positive lookahead rule encountered")
           when "iter"
             iter = parse_tree.capture("iter")
-            build_mutex_alt_string_set_for_rule_parse_tree(iter.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(iter.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           else
             raise "Unreachable branch!"
           end
@@ -201,7 +203,7 @@ module Arborist
             raise MutexAltBuildFailure.new("Optional rule encountered")
           when "label"
             label = parse_tree.capture("label")
-            build_mutex_alt_string_set_for_rule_parse_tree(label.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(label.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           else
             raise "Unreachable branch!"
           end
@@ -211,7 +213,7 @@ module Arborist
             raise MutexAltBuildFailure.new("Labelled term encountered")
           when "base"
             base = parse_tree.capture("base")
-            build_mutex_alt_string_set_for_rule_parse_tree(base.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(base.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           else
             raise "Unreachable branch!"
           end
@@ -219,21 +221,21 @@ module Arborist
           case top_level_alternative_label(parse_tree)
           when "mutexAlt"
             mutexAlt = parse_tree.capture("mutexAlt")
-            build_mutex_alt_string_set_for_rule_parse_tree(mutexAlt.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(mutexAlt.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "application"
             referenced_rule_name = parse_tree.capture("ident").text
             parse_tree = rule_name_to_parse_tree_map[referenced_rule_name]
             rule_name = parse_tree.enclosing_rule_name || raise "Unable to identify the name of the grammar rule in the Arborist grammar that recognized/produced the parse tree for the rule body/definition of the #{referenced_rule_name} rule in the user's grammar."
-            build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "range"
             range = parse_tree.capture("range")
-            build_mutex_alt_string_set_for_rule_parse_tree(range.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(range.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "terminal"
             terminal = parse_tree.capture("terminal")
-            build_mutex_alt_string_set_for_rule_parse_tree(terminal.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(terminal.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "group"
             alt = parse_tree.capture("Alt")
-            build_mutex_alt_string_set_for_rule_parse_tree(alt.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(alt.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "dot"
             # add_to_mutex_alt_set(strings, ALPHABET)
             Dot.new
@@ -242,15 +244,8 @@ module Arborist
           end
         when "MutexAlt"
           mutex_alt_parse_trees = parse_tree.captures("mutexAltTerm")
-          list_of_string_set_or_dot : Array(Set(String) | Dot) = mutex_alt_parse_trees.map do |mutex_alt_parse_tree|
-            build_mutex_alt_string_set_for_rule_parse_tree(mutex_alt_parse_tree.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes).as(Set(String) | Dot)
-          end
-          list_of_string_set_or_dot.reduce(Set(String).new.as(Set(String) | Dot)) do |memo, string_set_or_dot|
-            if memo.is_a?(Dot) || string_set_or_dot.is_a?(Dot)
-              Dot.new
-            else
-              memo | string_set_or_dot
-            end
+          mutex_alt_parse_trees.each do |mutex_alt_parse_tree|
+            build_mutex_alt_string_set_for_rule_parse_tree(mutex_alt_parse_tree.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union).as(Set(String) | Dot)
           end
         when "mutexAltTerm"
           # this is the entrypoint to this visitor function, but we call build_mutex_alt_string_set_for_rule_parse_tree
@@ -260,13 +255,13 @@ module Arborist
             referenced_rule_name = parse_tree.capture("ident").text
             parse_tree = rule_name_to_parse_tree_map[referenced_rule_name]
             rule_name = parse_tree.enclosing_rule_name || raise "Unable to identify the name of the grammar rule in the Arborist grammar that recognized/produced the parse tree for the rule body/definition of the #{referenced_rule_name} rule in the user's grammar."
-            build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(rule_name, parse_tree, rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "range"
             range = parse_tree.capture("range")
-            build_mutex_alt_string_set_for_rule_parse_tree(range.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(range.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "terminal"
             terminal = parse_tree.capture("terminal")
-            build_mutex_alt_string_set_for_rule_parse_tree(terminal.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes)
+            build_mutex_alt_string_set_for_rule_parse_tree(terminal.as(ApplyTree), rule_name_to_parse_tree_map, visited_nodes, string_set_union)
           when "dot"
             # add_to_mutex_alt_set(strings, ALPHABET)
             Dot.new
@@ -275,14 +270,16 @@ module Arborist
           end
         when "range"
           string_set = build_string_set_from_range_rule_application_parse_tree(parse_tree)
-          # add_to_mutex_alt_set(strings_or_dot, string_set)
+          add_to_mutex_alt_set(string_set_union, string_set)
         when "terminal"
           string_set = build_string_set_from_terminal(parse_tree)
-          # add_to_mutex_alt_set(strings_or_dot, string_set)
+          add_to_mutex_alt_set(string_set_union, string_set)
         else
           raise "Unknown parse tree rule: #{rule_name}"
           # Set(String).new
-        end || Set(String).new
+        end
+
+        string_set_union
       end
 
       def top_level_alternative_label(parse_tree : ParseTree) : String
