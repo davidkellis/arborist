@@ -592,6 +592,7 @@ module Arborist
               matcher.pos = pos
               parse_tree = traditional_rule_application(matcher, current_rule_application)      # line 19 of Algorithm 2
               seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
+              puts "#{"|  " * @@indent}candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.text) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.text) || "nil"}'"
               if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
                 matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
                 puts "#{"|  " * @@indent}finished seed growth for #{rule.name} at #{pos}"
