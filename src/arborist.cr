@@ -320,6 +320,19 @@ module Arborist
       nil
     end
 
+    # consults the rule application stack and returns the deepest/most-recent left-recursive 
+    # application of any rule occuring at position `pos`
+    def lookup_deepest_left_recursive_rule_appliation(pos) : ApplyCall?
+      i = @expr_call_stack.size - 1
+      while i >= 0
+        expr_application_i = @expr_call_stack[i]
+        i -= 1
+        next unless expr_application_i.is_a?(ApplyCall)
+        return expr_application_i if expr_application_i.left_recursive? && expr_application_id.pos == pos
+      end
+      nil
+    end
+
     def log_match_failure(pos : Int32, expr : Expr) : Nil
       failures = (@expr_failures[pos] ||= Set(Expr).new)
       failures << expr
@@ -469,6 +482,7 @@ module Arborist
 
   # Apply represents the application of a named rule
   class Apply
+    @@indent = 0
     getter rule_name : String
     property label : String?
 
@@ -496,11 +510,12 @@ module Arborist
 
     # this implements Tratt's Algorithm 2 in section 6.4 of https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
     def eval(matcher) : ParseTree?   # line 3 of Algorithm 2
-      return nil if matcher.fail_all_rules?
+      @@indent += 1
+      return (@@indent -= 1; nil) if matcher.fail_all_rules?
 
       rule = matcher.get_rule(@rule_name)
       pos = matcher.pos
-      # puts "try #{to_s} - #{rule.to_s} - rule #{rule.object_id} at #{pos}"
+      puts "#{"|  " * @@indent}try apply #{@rule_name} (rule #{rule.object_id}) at #{pos}"
 
       if matcher.has_memoized_result?(@rule_name)
         memoized_apply_tree = matcher.use_memoized_result(@rule_name)
@@ -508,9 +523,9 @@ module Arborist
         # was created with a label that is associated with a different invocation/application of the Rule identified by @rule_name than the 
         # invocation/application that this Apply object represents.
         memoized_apply_tree.set_label(@label) if memoized_apply_tree
+        puts "#{"|  " * @@indent}found memoized apply #{@rule_name} at #{pos} : #{memoized_apply_tree.as(ApplyTree).syntax_tree}"
         memoized_apply_tree
       else
-
         # has this same rule been applied at the same position previously?
         previous_application_of_rule_at_pos = matcher.lookup_rule_application_in_call_stack(rule, pos)
         
@@ -519,26 +534,32 @@ module Arborist
         # application of the same rule
         is_this_application_left_recursive_at_pos = !!previous_application_of_rule_at_pos
 
-        # look up the most recent left-recursive application of this rule, occurring at any position
+        # look up the most recent left-recursive application of this rule, occurring at any position.
+        # if one is found, then that implies we are already growing a seed for this rule at some position
         previous_left_recursive_application_of_rule = matcher.lookup_left_recursive_rule_application(rule)
 
         # is this rule currently in left recursion anywhere on the application call stack?
         is_rule_in_left_recursion_anywhere = !!previous_left_recursive_application_of_rule
 
         # if we're already in left recursion on `rule` and we have a seed growing for `rule` at `pos`, then we are in left recursion on rule `rule` at position `pos`
-        is_rule_in_left_recursion_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
+        # the name of this identifier is not quite right, but I can't figure out a good name for it - it indicates
+        # that the current application of this rule is 3-calls deep at the current position, because the second call was
+        # the first left recursive call, which would have started a seed growth, and this third call should return the seed
+        growing_seed_for_rule_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
 
         current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
+        puts "#{"|  " * @@indent}push apply #{@rule_name} (call #{current_rule_application.object_id}) at #{pos} #{is_this_application_left_recursive_at_pos && "; LR" || ""} #{growing_seed_for_rule_at_current_position && ", growing" || ""}"
 
         this_rule_application_may_be_memoized = false
 
-        parse_tree_from_rule_expr = if is_rule_in_left_recursion_at_current_position             # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
+        parse_tree_from_rule_expr = if growing_seed_for_rule_at_current_position             # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
           seed_parse_tree = matcher.growing[rule][pos]
           if seed_parse_tree
             matcher.pos = seed_parse_tree.finishing_pos + 1
           else
             matcher.pos = pos
           end
+          puts "#{"|  " * @@indent}return seed growth for #{@rule_name} at #{pos} #{seed_parse_tree.try(&.syntax_tree) || "nil"}"
           seed_parse_tree
         elsif is_this_application_left_recursive_at_pos                       # line 16 of Algorithm 2 - first LR call at pos - left recursive rule application, no input consumed since last application of `rule` at `pos`
           # This branch is all about growing the seed from the bottom up with Warth-style bottom-up seed-growing
@@ -573,6 +594,7 @@ module Arborist
               seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
               if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
                 matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
+                puts "#{"|  " * @@indent}delete seed growth #{rule.name} at #{pos}"
                 if seed_parse_tree
                   matcher.pos = seed_parse_tree.finishing_pos + 1
                 else
@@ -593,6 +615,7 @@ module Arborist
                 returning_seed_parse_tree = if is_this_application_left_recursive_at_pos && 
                             previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?  # we know with 100% certainty that `previous_application_of_rule_at_pos` is not nil, because the only way for current_rule_application to be left_recursive (which we establish earlier in this condition) is if previous_application_of_rule_at_pos is not nil. In other words, `is_this_application_left_recursive_at_pos==true` implies `!previous_application_of_rule_at_pos.nil?`
                   if seed_parse_tree
+                    puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (#{previous_application_of_rule_at_pos.rule.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'"
                     previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
                     matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)
                   end
@@ -602,13 +625,17 @@ module Arborist
                 end
                 pop_rule_application(matcher)
                 if returning_seed_parse_tree
-                  # puts "matched apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
-                  return ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
+                  new_apply_tree = ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
+                  puts "#{"|  " * @@indent}grow seed #{rule.name} at #{pos} done; matched #{@rule_name} (#{rule.object_id}) at #{pos} returning : '#{new_apply_tree.text}'"
+                  @@indent -= 1
+                  return new_apply_tree
                 else
-                  # puts "failed apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
+                  puts "#{"|  " * @@indent}grow seed #{rule.name} at #{pos} done; failed #{@rule_name} (#{rule.object_id}) at #{pos}"
+                  @@indent -= 1
                   return nil
                 end
               end                                                             # line 24 of Algorithm 2
+              puts "#{"|  " * @@indent}grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.text) || "nil"}'"
               matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
             end                                                               # line 26 of Algorithm 2
           else
@@ -628,6 +655,7 @@ module Arborist
             
             if previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?
               if seed_parse_tree
+                puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (#{previous_application_of_rule_at_pos.rule.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'"
                 previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
                 matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)
               end
@@ -644,11 +672,16 @@ module Arborist
         end                                                                 # line 35 of Algorithm 2
 
         # todo: do we need to move this to the end, since later logic depends on the call stack having this recursive call in it?
-        pop_rule_application(matcher)
+        popped_apply_call = pop_rule_application(matcher)
 
         apply_parse_tree = if parse_tree_from_rule_expr
-          # puts "matched apply rule #{rule.object_id} - #{rule.to_s} - at #{pos}"
           ApplyTree.new(parse_tree_from_rule_expr, @rule_name, matcher.input, pos, parse_tree_from_rule_expr.finishing_pos).label(@label)
+        end
+
+        if apply_parse_tree
+          puts "#{"|  " * @@indent}matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} : '#{apply_parse_tree.text}'"
+        else
+          puts "#{"|  " * @@indent}failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}"
         end
 
         # the aggregate state of the rules on the call stack that are in currently in recursion constitute a memoization context - parse
@@ -663,6 +696,7 @@ module Arborist
           matcher.memoize_result(pos, matcher.pos, @rule_name, apply_parse_tree) if this_rule_application_may_be_memoized
         # end
 
+        @@indent -= 1
         apply_parse_tree
 
       end
