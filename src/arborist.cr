@@ -594,7 +594,7 @@ module Arborist
               seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
               if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
                 matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
-                puts "#{"|  " * @@indent}delete seed growth #{rule.name} at #{pos}"
+                puts "#{"|  " * @@indent}finished seed growth for #{rule.name} at #{pos}"
                 if seed_parse_tree
                   matcher.pos = seed_parse_tree.finishing_pos + 1
                 else
@@ -615,7 +615,7 @@ module Arborist
                 returning_seed_parse_tree = if is_this_application_left_recursive_at_pos && 
                             previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?  # we know with 100% certainty that `previous_application_of_rule_at_pos` is not nil, because the only way for current_rule_application to be left_recursive (which we establish earlier in this condition) is if previous_application_of_rule_at_pos is not nil. In other words, `is_this_application_left_recursive_at_pos==true` implies `!previous_application_of_rule_at_pos.nil?`
                   if seed_parse_tree
-                    puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (#{previous_application_of_rule_at_pos.rule.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'"
+                    puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (call #{previous_application_of_rule_at_pos.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'"
                     previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
                     matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)
                   end
@@ -626,11 +626,11 @@ module Arborist
                 pop_rule_application(matcher)
                 if returning_seed_parse_tree
                   new_apply_tree = ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
-                  puts "#{"|  " * @@indent}grow seed #{rule.name} at #{pos} done; matched #{@rule_name} (#{rule.object_id}) at #{pos} returning : '#{new_apply_tree.text}'"
+                  puts "#{"|  " * @@indent}return seed for #{rule.name} at #{pos} : '#{returning_seed_parse_tree.text}'; matched #{@rule_name} (#{rule.object_id}) at #{pos} returning : '#{new_apply_tree.text}'"
                   @@indent -= 1
                   return new_apply_tree
                 else
-                  puts "#{"|  " * @@indent}grow seed #{rule.name} at #{pos} done; failed #{@rule_name} (#{rule.object_id}) at #{pos}"
+                  puts "#{"|  " * @@indent}return seed for #{rule.name} at #{pos} : nil; failed #{@rule_name} (#{rule.object_id}) at #{pos}"
                   @@indent -= 1
                   return nil
                 end
