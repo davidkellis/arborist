@@ -22,6 +22,16 @@ require "./parse_tree"
 require "./visitor"
 
 module Arborist
+  class GlobalDebug
+    @@enabled : Bool = false
+    def self.enabled?
+      @@enabled
+    end
+    def self.enable(enable : Bool)
+      @@enabled = enable
+    end
+  end
+
   class MemoResult
     property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
     property next_pos : Int32
@@ -515,7 +525,7 @@ module Arborist
 
       rule = matcher.get_rule(@rule_name)
       pos = matcher.pos
-      puts "#{"|  " * @@indent}try apply #{@rule_name} (rule #{rule.object_id}) at #{pos}"
+      puts "#{"|  " * @@indent}try apply #{@rule_name} (rule #{rule.object_id}) at #{pos}" if GlobalDebug.enabled?
 
       if matcher.has_memoized_result?(@rule_name)
         memoized_apply_tree = matcher.use_memoized_result(@rule_name)
@@ -523,7 +533,7 @@ module Arborist
         # was created with a label that is associated with a different invocation/application of the Rule identified by @rule_name than the 
         # invocation/application that this Apply object represents.
         memoized_apply_tree.set_label(@label) if memoized_apply_tree
-        puts "#{"|  " * @@indent}found memoized apply #{@rule_name} at #{pos} : #{memoized_apply_tree.as(ApplyTree).syntax_tree}"
+        puts "#{"|  " * @@indent}found memoized apply #{@rule_name} at #{pos} : #{memoized_apply_tree.as(ApplyTree).syntax_tree}" if GlobalDebug.enabled?
         memoized_apply_tree
       else
         # has this same rule been applied at the same position previously?
@@ -548,7 +558,7 @@ module Arborist
         growing_seed_for_rule_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
 
         current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
-        puts "#{"|  " * @@indent}push apply #{@rule_name} (call #{current_rule_application.object_id}) at #{pos} #{is_this_application_left_recursive_at_pos && "; LR" || ""} #{growing_seed_for_rule_at_current_position && ", growing" || ""}"
+        puts "#{"|  " * @@indent}push apply #{@rule_name} (call #{current_rule_application.object_id}) at #{pos} #{is_this_application_left_recursive_at_pos && "; LR" || ""} #{growing_seed_for_rule_at_current_position && ", growing" || ""}" if GlobalDebug.enabled?
 
         this_rule_application_may_be_memoized = false
 
@@ -560,7 +570,7 @@ module Arborist
           else
             matcher.pos = pos
           end
-          puts "#{"|  " * @@indent}return seed growth for #{@rule_name} at #{pos} : '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
+          puts "#{"|  " * @@indent}return seed growth for #{@rule_name} at #{pos} : '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'" if GlobalDebug.enabled?
           seed_parse_tree
         elsif is_this_application_left_recursive_at_pos                       # line 16 of Algorithm 2 - first LR call at pos - left recursive rule application, no input consumed since last application of `rule` at `pos`
           # This branch is all about growing the seed from the bottom up with Warth-style bottom-up seed-growing
@@ -593,10 +603,10 @@ module Arborist
               matcher.pos = pos
               parse_tree = traditional_rule_application(matcher, current_rule_application)      # line 19 of Algorithm 2
               seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
-              puts "#{"|  " * @@indent}candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.text) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.text) || "nil"}'"
+              puts "#{"|  " * @@indent}candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.text) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.text) || "nil"}'" if GlobalDebug.enabled?
               if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
                 matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
-                puts "#{"|  " * @@indent}finished seed growth for #{rule.name} at #{pos}"
+                puts "#{"|  " * @@indent}finished seed growth for #{rule.name} at #{pos}" if GlobalDebug.enabled?
                 if seed_parse_tree
                   matcher.pos = seed_parse_tree.finishing_pos + 1
                 else
@@ -617,27 +627,27 @@ module Arborist
                 returning_seed_parse_tree = if is_this_application_left_recursive_at_pos && 
                             previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?  # we know with 100% certainty that `previous_application_of_rule_at_pos` is not nil, because the only way for current_rule_application to be left_recursive (which we establish earlier in this condition) is if previous_application_of_rule_at_pos is not nil. In other words, `is_this_application_left_recursive_at_pos==true` implies `!previous_application_of_rule_at_pos.nil?`
                   if seed_parse_tree
-                    puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (call #{previous_application_of_rule_at_pos.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'"
+                    puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (call #{previous_application_of_rule_at_pos.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'" if GlobalDebug.enabled?
                     previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
-                    matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)
+                    # matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)     # this is wrong
                   end
-                  nil
+                  seed_parse_tree
                 else
                   seed_parse_tree
                 end
                 popped_apply_call = pop_rule_application(matcher)
                 if returning_seed_parse_tree
                   new_apply_tree = ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
-                  puts "#{"|  " * @@indent}return seed for #{rule.name} at #{pos} : '#{returning_seed_parse_tree.text}'; matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} returning : '#{new_apply_tree.text}'"
+                  puts "#{"|  " * @@indent}return seed for #{rule.name} at #{pos} : '#{returning_seed_parse_tree.text}'; matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} returning : '#{new_apply_tree.text}'" if GlobalDebug.enabled?
                   @@indent -= 1
                   return new_apply_tree
                 else
-                  puts "#{"|  " * @@indent}return nil seed for #{rule.name} at #{pos} ; failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}"
+                  puts "#{"|  " * @@indent}return nil seed for #{rule.name} at #{pos} ; failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}" if GlobalDebug.enabled?
                   @@indent -= 1
                   return nil
                 end
               end                                                             # line 24 of Algorithm 2
-              puts "#{"|  " * @@indent}grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.text) || "nil"}'"
+              puts "#{"|  " * @@indent}grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.text) || "nil"}'" if GlobalDebug.enabled?
               matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
             end                                                               # line 26 of Algorithm 2
           else
@@ -657,11 +667,11 @@ module Arborist
             
             if previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?
               if seed_parse_tree
-                puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (#{previous_application_of_rule_at_pos.rule.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'"
+                puts "#{"|  " * @@indent}fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (#{previous_application_of_rule_at_pos.rule.object_id}) assigning seed : '#{seed_parse_tree.try(&.text) || "nil"}'" if GlobalDebug.enabled?
                 previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
-                matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)
+                # matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)   # this is wrong
               end
-              nil
+              seed_parse_tree
             else
               seed_parse_tree
             end
@@ -681,9 +691,9 @@ module Arborist
         end
 
         if apply_parse_tree
-          puts "#{"|  " * @@indent}matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} : '#{apply_parse_tree.text}'"
+          puts "#{"|  " * @@indent}matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} : '#{apply_parse_tree.text}'" if GlobalDebug.enabled?
         else
-          puts "#{"|  " * @@indent}failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}"
+          puts "#{"|  " * @@indent}failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}" if GlobalDebug.enabled?
         end
 
         # the aggregate state of the rules on the call stack that are in currently in recursion constitute a memoization context - parse
@@ -713,19 +723,23 @@ module Arborist
 
       parse_tree = rule.expr.eval(matcher)
 
-      if matcher.fail_all_rules?
-        if current_rule_application == matcher.fail_all_rules_until_this_rule
-          # there is an assumption that if we take this branch, then this `current_rule_application` was the rule application that
-          # was identified as the original non-left-recursive call of `rule`, and therefore it *must* have its seed_parse_tree
-          # set with the parse tree that that matches as much of the input as a left-recursive application of `rule` at `origPos`
-          # could possibly match, and therefore we want to return that seed parse tree that had been previously built up.
-          matcher.fail_all_rules_until_this_rule = nil
-          seed_parse_tree = current_rule_application.seed_parse_tree
-          matcher.pos = seed_parse_tree.finishing_pos + 1 if seed_parse_tree
-          seed_parse_tree
-        else
-          return nil   # we need to fail this application because `matcher.fail_all_rules?` mode is enabled
-        end
+      # if matcher.fail_all_rules?
+      #   if current_rule_application == matcher.fail_all_rules_until_this_rule
+      #     # there is an assumption that if we take this branch, then this `current_rule_application` was the rule application that
+      #     # was identified as the original non-left-recursive call of `rule`, and therefore it *must* have its seed_parse_tree
+      #     # set with the parse tree that that matches as much of the input as a left-recursive application of `rule` at `origPos`
+      #     # could possibly match, and therefore we want to return that seed parse tree that had been previously built up.
+      #     matcher.fail_all_rules_until_this_rule = nil
+      #     seed_parse_tree = current_rule_application.seed_parse_tree
+      #     matcher.pos = seed_parse_tree.finishing_pos + 1 if seed_parse_tree
+      #     seed_parse_tree
+      #   else
+      #     return nil   # we need to fail this application because `matcher.fail_all_rules?` mode is enabled
+      #   end
+      if current_rule_application.seed_parse_tree
+        seed_parse_tree = current_rule_application.seed_parse_tree
+        matcher.pos = seed_parse_tree.finishing_pos + 1 if seed_parse_tree
+        seed_parse_tree
       else
         parse_tree
       end

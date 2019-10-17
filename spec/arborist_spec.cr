@@ -245,6 +245,129 @@ describe Arborist do
       m1.match("bb").try(&.syntax_tree).should be_nil
       m1.match("a").try(&.syntax_tree).should be_nil
     end
+
+    # examples taken from https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
+    describe "handles various kinds of left recursion" do
+      it "supports direct left recursion" do
+        # Left:
+        # E <- E '+n' / 'n'
+        e = choice(
+          seq(
+            apply("e"),
+            term("+n")
+          ),
+          term("n")
+        )
+        m1 = Matcher.new.add_rule("e", e)
+
+        # n+n+n should parse as (((n) + n) + n)
+        m1.match("n+n+n", "e").try(&.syntax_tree).should eq [["n", "+n"], "+n"]
+      end
+
+      it "supports hidden left recursion" do
+        # E <- F? E '+n' / 'n'
+        e = choice(
+          seq(
+            opt(apply("f")),
+            apply("e"),
+            term("+n")
+          ),
+          term("n")
+        )
+        f = term("foo")
+        m1 = Matcher.new.add_rule("e", e).add_rule("f", f)
+
+        # n+n+n should parse as (((n) + n) + n)
+        m1.match("n+n+n", "e").try(&.syntax_tree).should eq [["n", "+n"], "+n"]
+      end
+
+      it "supports obscured hidden left recursion" do
+        # E <- F E '+n' / 'n'
+        # F <- A B C / D*
+        e = choice(
+          seq(
+            apply("f"),
+            apply("e"),
+            term("+n")
+          ),
+          term("n")
+        )
+        f = choice(
+          seq(
+            apply("a"),
+            apply("b"),
+            apply("c")
+          ),
+          star(apply("d"))
+        )
+        a = term("a")
+        b = term("b")
+        c = term("c")
+        d = term("d")
+        m1 = Matcher.new.add_rule("e", e).add_rule("f", f).add_rule("a", a).add_rule("b", b).add_rule("c", c).add_rule("d", d)
+
+        # n+n+n should parse as (((n) + n) + n)
+        m1.match("n+n+n", "e").try(&.syntax_tree).should eq [[] of String, [[] of String, "n", "+n"], "+n"]
+      end
+
+      it "supports simple indirect left recursion" do
+        # E <- F '+n' / 'n'
+        # F <- E
+        e = choice(
+          seq(
+            apply("f"),
+            term("+n")
+          ),
+          term("n")
+        )
+        f = apply("e")
+        m1 = Matcher.new.
+          add_rule("e", e).
+          add_rule("f", f)
+
+        # n+n+n should parse as (((n) + n) + n)
+        m1.match("n+n+n", "e").try(&.syntax_tree).should eq [["n", "+n"], "+n"]
+      end
+
+      it "supports indirect left recursion" do
+        # E <- F '+n' / 'n'
+        # F <- G H / J
+        # J <- K / E L?
+        e = choice(
+          seq(
+            apply("f"),
+            term("+n")
+          ),
+          term("n")
+        )
+        f = choice(
+          seq(
+            apply("g"),
+            apply("h")
+          ),
+          apply("j")
+        )
+        j = choice(
+          apply("k"),
+          seq(apply("e"), opt(apply("l")))
+        )
+        g = term("g")
+        h = term("h")
+        k = term("k")
+        l = term("l")
+        m1 = Matcher.new.
+          add_rule("e", e).
+          add_rule("f", f).
+          add_rule("g", g).
+          add_rule("h", h).
+          add_rule("j", j).
+          add_rule("k", k).
+          add_rule("l", l)
+
+        # n+n+n should parse as (((n) + n) + n)
+        m1.match("n+n+n", "e").try(&.syntax_tree).should eq [[[["n"], "+n"]], "+n"]
+      end
+    end
   end
 
   describe "parse tree" do
