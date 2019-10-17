@@ -367,6 +367,30 @@ describe Arborist do
         # n+n+n should parse as (((n) + n) + n)
         m1.match("n+n+n", "e").try(&.syntax_tree).should eq [[[["n"], "+n"]], "+n"]
       end
+
+      it "mutually left recursive rules" do
+        # L <- P '.x' / 'x'
+        # P <- P '(n)' / L
+        l = choice(
+          seq(
+            apply("p"),
+            term(".x")
+          ),
+          term("x")
+        )
+        p = choice(
+          seq(
+            apply("p"),
+            term("(n)")
+          ),
+          apply("l")
+        )
+        m1 = Matcher.new.
+          add_rule("l", l).
+          add_rule("p", p)
+
+        m1.match("x(n)(n).x(n).x", "l").try(&.syntax_tree).should eq [[[[["x", "(n)"], "(n)"], ".x"], "(n)"], ".x"]
+      end
     end
   end
 
