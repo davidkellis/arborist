@@ -553,13 +553,14 @@ module Arborist
         this_rule_application_may_be_memoized = false
 
         parse_tree_from_rule_expr = if growing_seed_for_rule_at_current_position             # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
+          # return seed
           seed_parse_tree = matcher.growing[rule][pos]
           if seed_parse_tree
             matcher.pos = seed_parse_tree.finishing_pos + 1
           else
             matcher.pos = pos
           end
-          puts "#{"|  " * @@indent}return seed growth for #{@rule_name} at #{pos} #{seed_parse_tree.try(&.syntax_tree) || "nil"}"
+          puts "#{"|  " * @@indent}return seed growth for #{@rule_name} at #{pos} : '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
           seed_parse_tree
         elsif is_this_application_left_recursive_at_pos                       # line 16 of Algorithm 2 - first LR call at pos - left recursive rule application, no input consumed since last application of `rule` at `pos`
           # This branch is all about growing the seed from the bottom up with Warth-style bottom-up seed-growing
@@ -624,14 +625,14 @@ module Arborist
                 else
                   seed_parse_tree
                 end
-                pop_rule_application(matcher)
+                popped_apply_call = pop_rule_application(matcher)
                 if returning_seed_parse_tree
                   new_apply_tree = ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
-                  puts "#{"|  " * @@indent}return seed for #{rule.name} at #{pos} : '#{returning_seed_parse_tree.text}'; matched #{@rule_name} (#{rule.object_id}) at #{pos} returning : '#{new_apply_tree.text}'"
+                  puts "#{"|  " * @@indent}return seed for #{rule.name} at #{pos} : '#{returning_seed_parse_tree.text}'; matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} returning : '#{new_apply_tree.text}'"
                   @@indent -= 1
                   return new_apply_tree
                 else
-                  puts "#{"|  " * @@indent}return seed for #{rule.name} at #{pos} : nil; failed #{@rule_name} (#{rule.object_id}) at #{pos}"
+                  puts "#{"|  " * @@indent}return nil seed for #{rule.name} at #{pos} ; failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}"
                   @@indent -= 1
                   return nil
                 end
