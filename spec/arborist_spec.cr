@@ -389,6 +389,11 @@ describe Arborist do
           add_rule("l", l).
           add_rule("p", p)
 
+        # Per http://www.inf.puc-rio.br/~roberto/docs/sblp2012.pdf:
+        # This grammar generatesxandxfollowed by any number of (n) or.x, as longas it ends with.x. 
+        # An l-value is a prefix expression followed by a field access, ora single variable, and a prefix expression 
+        # is a prefix expression followed by anoperand, denoting a function call, or a valid l-value. 
+        # In the parse trees for thisgrammar each (n) or.xassociates to the left.
         m1.match("x(n)(n).x(n).x", "l").try(&.syntax_tree).should eq [[[[["x", "(n)"], "(n)"], ".x"], "(n)"], ".x"]
       end
     end
