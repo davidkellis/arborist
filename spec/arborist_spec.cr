@@ -246,8 +246,9 @@ describe Arborist do
       m1.match("a").try(&.syntax_tree).should be_nil
     end
 
-    # examples taken from https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
-    describe "handles various kinds of left recursion" do
+    # See https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
+    # and https://github.com/PhilippeSigaud/Pegged/blob/d091b9f5b7dc1401a989b262ca30b113841b48cc/pegged/grammar.d
+    describe "handles various kinds of left recursion that the Pegged library handles" do
       it "supports direct left recursion" do
         # Left:
         # E <- E '+n' / 'n'
@@ -449,9 +450,147 @@ describe Arborist do
 
         m1.match("nlm-n+(aaa)n", "e").try(&.syntax_tree).should eq [[[[[["n", "l"], "m"], "-"], "n"], "+", [["(", ["a", "a", "a"], ")"]]], "n"]
       end
+    end
 
+    # See https://github.com/norswap/autumn/blob/master/doc/A6-left-recursion-associativity.md
+    # and https://github.com/norswap/autumn/blob/master/test/TestParsers.java
+    describe "handles various kinds of left recursion that the Autumn library handles" do
+      it "supports simple left recursion" do
+        # A -> Aa | a
+        a = choice(
+          seq(
+            apply("a"),
+            term("a")
+          ),
+          term("a")
+        )
+        m = Matcher.new.add_rule("a", a)
+
+        m.match("a", "a").try(&.syntax_tree).should eq "a"
+        m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
+        m.match("aaa", "a").try(&.syntax_tree).should eq [["a", "a"], "a"]
+        m.match("aaaa", "a").try(&.syntax_tree).should eq [[["a", "a"], "a"], "a"]
+      end
+
+      it "supports nested left recursion" do
+        # A -> Aa | a
+        # B -> Bb | A
+        a = choice(
+          seq(
+            apply("a"),
+            term("a")
+          ),
+          term("a")
+        )
+        b = choice(
+          seq(
+            apply("b"),
+            term("b")
+          ),
+          apply("a")
+        )
+        m = Matcher.new.add_rule("a", a).add_rule("b", b)
+
+        m.match("ab", "b").try(&.syntax_tree).should eq ["a", "b"]
+        m.match("aaab", "b").try(&.syntax_tree).should eq [[["a", "a"], "a"], "b"]
+        m.match("abbb", "b").try(&.syntax_tree).should eq [[["a", "b"], "b"], "b"]
+        m.match("aaabbb", "b").try(&.syntax_tree).should eq [[[[["a", "a"], "a"], "b"], "b"], "b"]
+      end
+
+      it "supports simple left- and right- recursive rules (and is left-associative)" do
+        # A -> AA | a
+        a = choice(
+          seq(
+            apply("a"),
+            apply("a")
+          ),
+          term("a")
+        )
+        m = Matcher.new.add_rule("a", a)
+
+        m.match("a", "a").try(&.syntax_tree).should eq "a"
+        m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
+        m.match("aaa", "a").try(&.syntax_tree).should eq [["a", "a"], "a"]
+        m.match("aaaa", "a").try(&.syntax_tree).should eq [[["a", "a"], "a"], "a"]
+      end
+
+      it "supports left- and right-recursion + right-recursion; producing the left-most derivation" do
+        # A -> AA | bA | a
+        a = choice(
+          seq(
+            apply("a"),
+            apply("a")
+          ),
+          seq(
+            term("b"),
+            apply("a")
+          ),
+          term("a")
+        )
+        m = Matcher.new.add_rule("a", a)
+
+        m.match("a", "a").try(&.syntax_tree).should eq "a"
+        m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
+        m.match("aaa", "a").try(&.syntax_tree).should eq [["a", "a"], "a"]
+        m.match("aaaa", "a").try(&.syntax_tree).should eq [[["a", "a"], "a"], "a"]
+        m.match("ba", "a").try(&.syntax_tree).should eq ["b", "a"]
+        m.match("baa", "a").try(&.syntax_tree).should eq [["b", "a"], "a"]
+        m.match("bba", "a").try(&.syntax_tree).should eq ["b", ["b", "a"]]
+        m.match("bbaa", "a").try(&.syntax_tree).should eq [["b", ["b", "a"]], "a"]
+        m.match("b", "a").try(&.syntax_tree).should be_nil
+        m.match("", "a").try(&.syntax_tree).should be_nil
+      end
+
+      it "supports separated left- and right-recursion (right first); producing the left-most derivation" do
+        # A -> aA | Aa | a
+        a = choice(
+          seq(
+            term("a"),
+            apply("a")
+          ),
+          seq(
+            apply("a"),
+            term("a")
+          ),
+          term("a")
+        )
+        m = Matcher.new.add_rule("a", a)
+
+        m.match("a", "a").try(&.syntax_tree).should eq "a"
+        m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
+        m.match("aaa", "a").try(&.syntax_tree).should eq ["a", ["a", "a"]]
+        m.match("aaaa", "a").try(&.syntax_tree).should eq ["a", ["a", ["a", "a"]]]
+        m.match("b", "a").try(&.syntax_tree).should be_nil
+        m.match("", "a").try(&.syntax_tree).should be_nil
+      end
+
+      it "supports separated left- and right-recursion (left first); producing the left-most derivation" do
+        # A -> Aa | aA | a
+        a = choice(
+          seq(
+            apply("a"),
+            term("a")
+          ),
+          seq(
+            term("a"),
+            apply("a")
+          ),
+          term("a")
+        )
+        m = Matcher.new.add_rule("a", a)
+
+        m.match("a", "a").try(&.syntax_tree).should eq "a"
+        m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
+        Arborist::GlobalDebug.enable!
+        m.match("aaa", "a").try(&.syntax_tree).should eq ["a", ["a", "a"]]
+        Arborist::GlobalDebug.disable!
+        m.match("aaaa", "a").try(&.syntax_tree).should eq ["a", ["a", ["a", "a"]]]
+        m.match("b", "a").try(&.syntax_tree).should be_nil
+        m.match("", "a").try(&.syntax_tree).should be_nil
+      end
 
     end
+
   end
 
   describe "parse tree" do
