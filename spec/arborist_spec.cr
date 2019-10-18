@@ -368,7 +368,7 @@ describe Arborist do
         m1.match("n+n+n", "e").try(&.syntax_tree).should eq [[[["n"], "+n"]], "+n"]
       end
 
-      it "mutually left recursive rules" do
+      it "supports mutually left recursive rules" do
         # L <- P '.x' / 'x'
         # P <- P '(n)' / L
         l = choice(
@@ -396,6 +396,61 @@ describe Arborist do
         # In the parse trees for thisgrammar each (n) or.xassociates to the left.
         m1.match("x(n)(n).x(n).x", "l").try(&.syntax_tree).should eq [[[[["x", "(n)"], "(n)"], ".x"], "(n)"], ".x"]
       end
+
+      it "supports interlocking cycles of indirect left-recursion" do
+        # E <- F 'n' / 'n'
+        # F <- E '+' I* / G '-'
+        # G <- H 'm' / E
+        # H <- G 'l'
+        # I <- '(' A+ ')'
+        # A <- 'a'
+        e = choice(
+          seq(
+            apply("f"),
+            term("n")
+          ),
+          term("n")
+        )
+        f = choice(
+          seq(
+            apply("e"),
+            term("+"),
+            star(apply("i"))
+          ),
+          seq(
+            apply("g"),
+            term("-")
+          )
+        )
+        g = choice(
+          seq(
+            apply("h"),
+            term("m")
+          ),
+          apply("e")
+        )
+        h = seq(
+          apply("g"),
+          term("l")
+        )
+        i = seq(
+          term("("),
+          plus(apply("a")),
+          term(")")
+        )
+        a = term("a")
+        m1 = Matcher.new.
+          add_rule("e", e).
+          add_rule("f", f).
+          add_rule("g", g).
+          add_rule("h", h).
+          add_rule("i", i).
+          add_rule("a", a)
+
+        m1.match("nlm-n+(aaa)n", "e").try(&.syntax_tree).should eq [[[[[["n", "l"], "m"], "-"], "n"], "+", [["(", ["a", "a", "a"], ")"]]], "n"]
+      end
+
+
     end
   end
 
