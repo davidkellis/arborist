@@ -190,7 +190,7 @@ describe Arborist do
     end
 
     it "allows rules that are left-recursive and simultaneously recursive in a second point, but not right-recursive" do
-      e = choice(seq(apply("e"), term("-"), apply("e"), term("m")), term("5"))    # e -> e - e | 5
+      e = choice(seq(apply("e"), term("-"), apply("e"), term("m")), term("5"))    # e -> e - e "m" | 5
       m1 = Matcher.new.add_rule("e", e)
 
       m1.match("5-5m-5m", "e").try(&.syntax_tree).should eq [["5", "-", "5", "m"], "-", "5", "m"]   # should parse as (((5)-5m)-5m)
