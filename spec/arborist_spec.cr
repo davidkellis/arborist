@@ -322,12 +322,14 @@ describe Arborist do
           term("n")
         )
         f = apply("e")
-        m1 = Matcher.new.
+        m5 = Matcher.new.
           add_rule("e", e).
           add_rule("f", f)
 
         # n+n+n should parse as (((n) + n) + n)
-        m1.match("n+n+n", "e").try(&.syntax_tree).should eq [["n", "+n"], "+n"]
+        # Arborist::GlobalDebug.enable!
+        m5.match("n+n+n", "e").try(&.syntax_tree).should eq [["n", "+n"], "+n"]
+        # Arborist::GlobalDebug.disable!
       end
 
       it "supports indirect left recursion" do
@@ -582,38 +584,11 @@ describe Arborist do
 
         m.match("a", "a").try(&.syntax_tree).should eq "a"
         m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
-        Arborist::GlobalDebug.enable!
+        # Arborist::GlobalDebug.enable!
         m.match("aaa", "a").try(&.syntax_tree).should eq ["a", ["a", "a"]]
-        Arborist::GlobalDebug.disable!
+        # Arborist::GlobalDebug.disable!
         m.match("aaaa", "a").try(&.syntax_tree).should eq ["a", ["a", ["a", "a"]]]
         m.match("b", "a").try(&.syntax_tree).should be_nil
-        m.match("", "a").try(&.syntax_tree).should be_nil
-      end
-
-      it "supports separated left- and right-recursion (left-recursion first); produces a right-associative derivation" do
-        # A -> B
-        # B -> Bb | bB | b
-        a = apply("b")
-        b = choice(
-          seq(
-            apply("b"),
-            term("b")
-          ),
-          seq(
-            term("b"),
-            apply("b")
-          ),
-          term("b")
-        )
-        m = Matcher.new.add_rule("a", a).add_rule("b", b)
-
-        m.match("b", "a").try(&.syntax_tree).should eq "b"
-        m.match("bb", "a").try(&.syntax_tree).should eq ["b", "b"]
-        # Arborist::GlobalDebug.enable!
-        m.match("bbb", "a").try(&.syntax_tree).should eq ["b", ["b", "b"]]
-        # Arborist::GlobalDebug.disable!
-        m.match("bbbb", "a").try(&.syntax_tree).should eq ["b", ["b", ["b", "b"]]]
-        m.match("a", "a").try(&.syntax_tree).should be_nil
         m.match("", "a").try(&.syntax_tree).should be_nil
       end
 

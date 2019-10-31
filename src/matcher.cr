@@ -1,4 +1,119 @@
 module Arborist
+  class MemoResult
+    property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
+    property next_pos : Int32
+
+    def initialize(@parse_tree = nil, @next_pos = 0)
+    end
+  end
+
+  # Column is a Map from rule_name => memoized-parse-tree-with-next-pos-state
+  alias Column = Hash(String, MemoResult)
+
+  class MemoTree
+    # stores the memoized parse trees that occur in the rule-in-recursion call stack state represented by this MemoTree node
+    property memo_table : Hash(Int32, Column)
+
+    # stores memoization tables for ApplyCalls that occur in a more specific rule-in-recursion call stack state than is represented by this MemoTree node
+    # The tuple representing the key is of the form: {pos, rule_name}
+    property children : Hash({Int32, String}, MemoTree)
+
+    def initialize()
+      @memo_table = {} of Int32 => Column
+      @children = {} of {Int32, String} => MemoTree
+    end
+
+    def clone()
+      mt = MemoTree.new
+      self.memo_table.each do |pos, col|
+        mt.memo_table[pos] = col.dup    # shallow copy of Column
+      end
+      mt
+    end
+
+    def exist?(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : Bool
+      tree_node : MemoTree = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        tree_node = tree_node.children[pos_rule_name_pair]? || (return false)
+      end
+
+      tree_node.local_exist?(pos, rule_name)
+    end
+
+    def local_exist?(pos : Int32, rule_name : String) : Bool
+      col = self.memo_table[pos]?
+      (col && col.has_key?(rule_name)) || false
+    end
+
+    def lookup(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : MemoResult?
+      tree_node : MemoTree = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        tree_node = tree_node.children[pos_rule_name_pair]? || (return nil)
+      end
+      memo_table = tree_node.memo_table
+      col = memo_table[pos]?
+      col[rule_name]? if col
+
+
+      # tree_node = lookup_tree_node(rule_in_recursion_call_stack_state)
+      # if tree_node
+      #   memo_table = tree_node.memo_table
+      #   col = memo_table[pos]?
+      #   col[rule_name]? if col
+      # end
+
+
+      # tree_node = self
+      # memo_table = tree_node.memo_table
+      # col = memo_table[pos]?
+      # memo_result = col[rule_name]? if col
+      # return memo_result if memo_result
+
+      # rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+      #   if tree_node.children.has_key?(pos_rule_name_pair)
+      #     tree_node = tree_node.children[pos_rule_name_pair]
+      #     memo_table = tree_node.memo_table
+      #     col = memo_table[pos]?
+      #     memo_result = col[rule_name]? if col
+      #     return memo_result if memo_result
+      #   else
+      #     return nil
+      #   end
+      # end
+    end
+
+    def local_lookup(pos : Int32, rule_name : String) : MemoResult
+      self.memo_table[pos][rule_name]
+    end
+
+
+    def add(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
+      tree_node = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        tree_node = (tree_node.children[pos_rule_name_pair] ||= tree_node.clone)
+      end
+
+      tree_node.local_memoize(pos, rule_name, memo_result)
+    end
+
+    def local_memoize(pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
+      memo_table = self.memo_table
+      col = (memo_table[pos] ||= Column.new)
+      col[rule_name] = memo_result
+    end
+
+    private def lookup_tree_node(rule_in_recursion_call_stack_state : Array({Int32, String})) : MemoTree?
+      tree_node = self
+      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+        child = tree_node.children[pos_rule_name_pair]?
+        return nil unless child
+        tree_node = child
+      end
+      tree_node
+    end
+  end
+
+
   class Matcher
     include DSL
     
@@ -114,6 +229,15 @@ module Arborist
       nil
     end
 
+    # returns the leftmost/earliest/oldest/shallowest application of `rule` in the rule application stack that resulted in left recursion
+    def lookup_oldest_left_recursive_rule_application(rule) : ApplyCall?
+      @expr_call_stack.each do |expr_application|
+        next unless expr_application.is_a?(ApplyCall)
+        return expr_application if expr_application.rule == rule && expr_application.resulted_in_left_recursion?
+      end
+      nil
+    end
+
     # consults the rule application stack and returns the deepest/most-recent left-recursive 
     # application of any rule occuring at position `pos`
     def lookup_deepest_left_recursive_rule_appliation(pos) : ApplyCall?
@@ -174,6 +298,7 @@ module Arborist
     end
 
     def memoize_result(pos, next_pos, rule_name, parse_tree : ParseTree?) : MemoResult
+      GlobalDebug.puts "memoizing #{rule_name} at #{pos}-#{next_pos} with rule_in_recursion_call_stack_state=#{rule_in_recursion_call_stack_state} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
       @memo_tree.add(rule_in_recursion_call_stack_state, pos, rule_name, MemoResult.new(parse_tree, next_pos))
       # col = (@memoTable[pos] ||= {} of String => MemoResult)
       # col[rule_name] = MemoResult.new(parse_tree, next_pos)
@@ -191,13 +316,28 @@ module Arborist
       # memo_result.parse_tree
     end
 
+    # this method marks all ApplyCall calls on the call stack occurring more recent than oldest_application as unsafe to memoize
+    def mark_most_recent_applications_unsafe_to_memoize(oldest_application)
+      apply_calls = apply_calls_in_call_stack
+      i = apply_calls.index(oldest_application)
+      apply_calls[i...].skip(1).each(&.not_safe_to_memoize!)
+    end
+
     def left_recursive_apply_calls : Array(ApplyCall)
       @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.left_recursive? }.map(&.as(ApplyCall))
     end
 
+    def apply_calls_that_resulted_in_left_recursion : Array(ApplyCall)
+      @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.resulted_in_left_recursion? }.map(&.as(ApplyCall))
+    end
+
+    def apply_calls_in_call_stack : Array(ApplyCall)
+      @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) }.map(&.as(ApplyCall))
+    end
+
     # returns an array of pairs of the form {pos, rule_name}, each summarizing an ApplyCall
     def rule_in_recursion_call_stack_state : Array({Int32, String})
-      left_recursive_apply_calls.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
+      apply_calls_that_resulted_in_left_recursion.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
     end
 
     # def any_left_recursion_ongoing? : Bool

@@ -58,120 +58,6 @@ module Arborist
     end
   end
 
-  class MemoResult
-    property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
-    property next_pos : Int32
-
-    def initialize(@parse_tree = nil, @next_pos = 0)
-    end
-  end
-
-  # Column is a Map from rule_name => memoized-parse-tree-with-next-pos-state
-  alias Column = Hash(String, MemoResult)
-
-  class MemoTree
-    # stores the memoized parse trees that occur in the rule-in-recursion call stack state represented by this MemoTree node
-    property memo_table : Hash(Int32, Column)
-
-    # stores memoization tables for ApplyCalls that occur in a more specific rule-in-recursion call stack state than is represented by this MemoTree node
-    # The tuple representing the key is of the form: {pos, rule_name}
-    property children : Hash({Int32, String}, MemoTree)
-
-    def initialize()
-      @memo_table = {} of Int32 => Column
-      @children = {} of {Int32, String} => MemoTree
-    end
-
-    def clone()
-      mt = MemoTree.new
-      self.memo_table.each do |pos, col|
-        mt.memo_table[pos] = col.dup    # shallow copy of Column
-      end
-      mt
-    end
-
-    def exist?(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : Bool
-      tree_node : MemoTree = self
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        tree_node = tree_node.children[pos_rule_name_pair]? || (return false)
-      end
-
-      tree_node.local_exist?(pos, rule_name)
-    end
-
-    def local_exist?(pos : Int32, rule_name : String) : Bool
-      col = self.memo_table[pos]?
-      (col && col.has_key?(rule_name)) || false
-    end
-
-    def lookup(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : MemoResult?
-      tree_node : MemoTree = self
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        tree_node = tree_node.children[pos_rule_name_pair]? || (return nil)
-      end
-      memo_table = tree_node.memo_table
-      col = memo_table[pos]?
-      col[rule_name]? if col
-
-
-      # tree_node = lookup_tree_node(rule_in_recursion_call_stack_state)
-      # if tree_node
-      #   memo_table = tree_node.memo_table
-      #   col = memo_table[pos]?
-      #   col[rule_name]? if col
-      # end
-
-
-      # tree_node = self
-      # memo_table = tree_node.memo_table
-      # col = memo_table[pos]?
-      # memo_result = col[rule_name]? if col
-      # return memo_result if memo_result
-
-      # rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-      #   if tree_node.children.has_key?(pos_rule_name_pair)
-      #     tree_node = tree_node.children[pos_rule_name_pair]
-      #     memo_table = tree_node.memo_table
-      #     col = memo_table[pos]?
-      #     memo_result = col[rule_name]? if col
-      #     return memo_result if memo_result
-      #   else
-      #     return nil
-      #   end
-      # end
-    end
-
-    def local_lookup(pos : Int32, rule_name : String) : MemoResult
-      self.memo_table[pos][rule_name]
-    end
-
-
-    def add(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
-      tree_node = self
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        tree_node = (tree_node.children[pos_rule_name_pair] ||= tree_node.clone)
-      end
-
-      tree_node.local_memoize(pos, rule_name, memo_result)
-    end
-
-    def local_memoize(pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
-      memo_table = self.memo_table
-      col = (memo_table[pos] ||= Column.new)
-      col[rule_name] = memo_result
-    end
-
-    private def lookup_tree_node(rule_in_recursion_call_stack_state : Array({Int32, String})) : MemoTree?
-      tree_node = self
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        child = tree_node.children[pos_rule_name_pair]?
-        return nil unless child
-        tree_node = child
-      end
-      tree_node
-    end
-  end
-
   class Rule
     getter matcher : Matcher
     property name : String
@@ -225,10 +111,14 @@ module Arborist
     getter rule : Rule
     property left_recursive : Bool
     property seed_parse_tree : ParseTree?
+    property resulted_in_left_recursion : Bool
+    property safe_to_memoize : Bool
 
     def initialize(apply_expr : Apply, @rule, @pos, @left_recursive = false)
       @expr = apply_expr
       @seed_parse_tree = nil
+      @resulted_in_left_recursion = false
+      @safe_to_memoize = true
     end
 
     def rule_name
@@ -262,6 +152,26 @@ module Arborist
     # returns true if this rule application is left recursive at `@pos`; false otherwise
     def left_recursive?
       @left_recursive
+    end
+
+    def set_left_recursive(new_value)
+      @left_recursive = new_value
+    end
+
+    def resulted_in_left_recursion?
+      @resulted_in_left_recursion
+    end
+
+    def set_resulted_in_left_recursion(new_value)
+      @resulted_in_left_recursion = new_value
+    end
+
+    def safe_to_memoize?
+      @safe_to_memoize
+    end
+
+    def not_safe_to_memoize!
+      @safe_to_memoize = false
     end
 
     def syntactic_rule?
@@ -327,6 +237,8 @@ module Arborist
         # application of the same rule
         is_this_application_left_recursive_at_pos = !!previous_application_of_rule_at_pos
 
+        previous_application_of_rule_at_pos.set_resulted_in_left_recursion(true) if previous_application_of_rule_at_pos
+
         # look up the most recent left-recursive application of this rule, occurring at any position.
         # if one is found, then that implies we are already growing a seed for this rule at some position
         previous_left_recursive_application_of_rule = matcher.lookup_left_recursive_rule_application(rule)
@@ -343,9 +255,10 @@ module Arborist
         current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
         GlobalDebug.puts "push apply #{@rule_name} (call #{current_rule_application.object_id}) at #{pos} #{is_this_application_left_recursive_at_pos && "; LR" || ""} #{growing_seed_for_rule_at_current_position && ", growing" || ""}"
 
-        this_rule_application_may_be_memoized = false
+        parse_tree_from_rule_expr = if is_this_application_left_recursive_at_pos
+          # mark all applications between this application and the parent application (excluding the parent) as not safe to memoize
+          matcher.mark_most_recent_applications_unsafe_to_memoize(previous_application_of_rule_at_pos)
 
-        parse_tree_from_rule_expr = if growing_seed_for_rule_at_current_position             # line 14 of Algorithm 2 - we are in left recursion on rule `rule` at position `pos`
           # return seed
           seed_parse_tree = matcher.growing[rule][pos]
           if seed_parse_tree
@@ -355,7 +268,7 @@ module Arborist
           end
           GlobalDebug.puts "return seed growth for #{@rule_name} at #{pos} : '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
           seed_parse_tree
-        elsif is_this_application_left_recursive_at_pos                       # line 16 of Algorithm 2 - first LR call at pos - left recursive rule application, no input consumed since last application of `rule` at `pos`
+        else
           # This branch is all about growing the seed from the bottom up with Warth-style bottom-up seed-growing
 
           # We want to maximally grow the seed at the first occurrence of a left-recursive rule application of `rule`.
@@ -377,125 +290,42 @@ module Arborist
           # second-level, third-level, etc.-level left-recursive call will be treated as the parse tree for those left-recursive
           # calls.
 
-          number_of_seeds_being_grown_for_rule = matcher.growing[rule]?.try(&.size) || 0
-          if number_of_seeds_being_grown_for_rule == 0
-            # if this is a top-level seed growth for `rule`, then do the following:
-            matcher.growing[rule][pos] = nil                                  # line 17 of Algorithm 2
-            full_grown_seed_to_return = nil
-            GlobalDebug.puts "starting seed growth for rule #{rule.name} at #{pos}"
-            while true                                                        # line 18 of Algorithm 2 - this loop switches to a Warth et al.-style iterative bottom-up parser
-              # parse_tree = eval(matcher, calling_rule, calling_rule_pos)    # line 19 of Algorithm 2 - this is wrong; we need to apply the rule in traditional style instead
-              matcher.pos = pos
-              parse_tree = traditional_rule_application(matcher, current_rule_application)      # line 19 of Algorithm 2
-              seed_parse_tree = matcher.growing[rule][pos]                    # line 20 of Algorithm 2
+          matcher.growing[rule][pos] = nil
+          full_grown_seed_to_return = nil
+          current_rule_application.set_resulted_in_left_recursion(false)    # this may not even be necessary since the initial value is false
+
+          GlobalDebug.puts "starting seed growth for rule #{rule.name} at #{pos}"
+          while true
+            matcher.pos = pos
+            parse_tree = traditional_rule_application(matcher, current_rule_application)
+
+            oldest_application_resulting_in_left_recursion = matcher.lookup_oldest_left_recursive_rule_application(rule)
+            if current_rule_application.resulted_in_left_recursion? &&                           # we only want to grow the seed bottom up if this application spawned a recursive apply call
+                  oldest_application_resulting_in_left_recursion == current_rule_application     # and we only want to grow the seed on the leftmost/earliest/shallowest application in a call stack that resulted in left recursion on this rule; the subsequent applications of this rule that would have resulted in left recursion should not grow their seed (should not recurse)
+              seed_parse_tree = matcher.growing[rule][pos]
               GlobalDebug.puts "candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.syntax_tree) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
-              if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # line 21 of Algorithm 2 - this condition indicates we're done growing the seed - it can't be grown any further
-                matcher.growing[rule].delete(pos)                             # line 22 of Algorithm 2
+              if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # we're done growing the seed; it can't grow any further
                 GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos}"
+                full_grown_seed_to_return = seed_parse_tree
                 if seed_parse_tree
                   matcher.pos = seed_parse_tree.finishing_pos + 1
                 else
                   matcher.pos = pos
                 end
-                
-                # now that we're finished growing the seed...
-                # If this rule application was left recursive, but the previous one wasn't left recursive, then we know that the parse tree
-                # returned by this rule application is the seed parse tree. Since the seed is done growing, then `seed_parse_tree`
-                # is what we would like for the previous (non-recursive) rule application - `previous_application_of_rule_at_pos` - to
-                # return as its parse tree -- but only if the seed doesn't represent a parse error. If the seed reprsents a parse error, 
-                # then we just want to return nil, like a normal failed rule application. That will bail us out of left-recursion mode, 
-                # and give the rule's other alternatives a chance to match on the original non-left-recursive application of `rule`.
-                # In order to do that, we're going to store the seed parse tree in the `previous_application_of_rule_at_pos`
-                # so that it can return the seed parse tree, and we will make this rule application (and all intermediate rule applications 
-                # that happened between this one and `previous_application_of_rule_at_pos`) fail, which will give `previous_application_of_rule_at_pos` the
-                # opportunity to return the seed parse tree. Then parsing can continue as normal.
-                returning_seed_parse_tree = if is_this_application_left_recursive_at_pos && 
-                            previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?  # we know with 100% certainty that `previous_application_of_rule_at_pos` is not nil, because the only way for current_rule_application to be left_recursive (which we establish earlier in this condition) is if previous_application_of_rule_at_pos is not nil. In other words, `is_this_application_left_recursive_at_pos==true` implies `!previous_application_of_rule_at_pos.nil?`
-                  if seed_parse_tree
-                    GlobalDebug.puts "fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (call #{previous_application_of_rule_at_pos.object_id}) assigning seed : '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
-                    # previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
-                    previous_application_of_rule_at_pos.add_candidate_seed_parse_tree(seed_parse_tree)
-                    # we don't fail all rules back to previous_application_of_rule_at_pos and we don't jump back up the stack to the 
-                    # previous_application_of_rule_at_pos call, because it is possible for mutually left-recursive rules to be defined such that
-                    # the same rule can be applied at the same position at different levels in the call stack and the expectation
-                    # is that each application of the rule would capture a subsequence of a larger match, where the deepest applications
-                    # of the rule match a small amount of text and the shallower applications of the rule match a larger and larger amount
-                    # of text.
-                    # 
-                    # matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)     # this is wrong
-                  end
-                  seed_parse_tree
-                else
-                  seed_parse_tree
-                end
-                # popped_apply_call = pop_rule_application(matcher)
-                # if returning_seed_parse_tree
-                #   new_apply_tree = ApplyTree.new(returning_seed_parse_tree, @rule_name, matcher.input, pos, returning_seed_parse_tree.finishing_pos).label(@label)
-                #   GlobalDebug.puts "return seed for #{rule.name} at #{pos} : '#{returning_seed_parse_tree.text}'; matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} returning : '#{new_apply_tree.text}'"
-                #   GlobalDebug.decrement
-                #   return new_apply_tree
-                # else
-                #   GlobalDebug.puts "return nil seed for #{rule.name} at #{pos} ; failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}"
-                #   GlobalDebug.decrement
-                #   return nil
-                # end
-                full_grown_seed_to_return = returning_seed_parse_tree
                 break
-              end                                                             # line 24 of Algorithm 2
-
-              GlobalDebug.puts "grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
-              matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
-            end                                                               # line 26 of Algorithm 2
-            
-            GlobalDebug.puts "finishing seed growth for rule #{rule.name} at #{pos} : '#{full_grown_seed_to_return.try(&.syntax_tree) || "nil"}'"
-            full_grown_seed_to_return
-          else
-            # This branch should only be executed on an appliation of the same rule at a position farther in the input; 
-            # the position should never overlap with an earlier seed growth, which is why it is ok to start a new `nil` 
-            # seed as the current position - it doesn't conflict with any earlier seed growth.
-            # In this branch, we are starting a deeper level seed growth (farther in the input), and we only want the 
-            # seed to grow so long as it doesn't grow by means of further left-recursion. This is what prevents rules 
-            # that are left and right recursive from recursing ever deeper on the right recursive call - this is what 
-            # causes left and right recursive rules to be left associative, and to consume as much input as possible 
-            # on the left recursive application *first*, before consuming input on the right recursive call.
-            # NOTE: If we ever wanted to enable the user to define a left- and right-recursive rule to be 
-            # right-associative, instead of left-associative (which is the default, and what we generally want, because 
-            # the PEG formalism says to recognize left-most derivation), then we could selectively disable this branch, 
-            # and force the `true` branch of this if/else/end statement to handle all recursion. That would cause the 
-            # original incorrect behavior of left- and right-recursive rules to parse the rule as right-associative, 
-            # instead of the left-associative parse that we want to occur by default.
-            # So, we need to start a new seed growth with a nil seed, but we are never going
-            # to update the seed, thereby ensuring that any any further left-recursion on `rule` at `pos` fails
-            GlobalDebug.puts "secondary seed growth for rule #{current_rule_application.rule_name}"
-
-            matcher.growing[rule][pos] = nil                                  # line 17 of Algorithm 2
-
-            matcher.pos = pos
-            seed_parse_tree = traditional_rule_application(matcher, current_rule_application)      # line 19 of Algorithm 2
-            matcher.growing[rule].delete(pos)                                 # line 22 of Algorithm 2
-            if seed_parse_tree
-              matcher.pos = seed_parse_tree.finishing_pos + 1
-            else
-              matcher.pos = pos
-            end
-            
-            if previous_application_of_rule_at_pos && !previous_application_of_rule_at_pos.left_recursive?
-              if seed_parse_tree
-                GlobalDebug.puts "fail all rules back to #{previous_application_of_rule_at_pos.rule_name} (#{previous_application_of_rule_at_pos.object_id}) assigning seed : '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
-                # previous_application_of_rule_at_pos.seed_parse_tree = seed_parse_tree
-                previous_application_of_rule_at_pos.add_candidate_seed_parse_tree(seed_parse_tree)
-                # matcher.fail_all_rules_back_to(previous_application_of_rule_at_pos)   # this is wrong
               end
-              seed_parse_tree
             else
-              seed_parse_tree
+              full_grown_seed_to_return = parse_tree
+              break
             end
 
+            GlobalDebug.puts "grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
+            matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
           end
-        else                                                                # line 27 of Algorithm 2
-          # this is the only branch not involved in growing a seed in the current rule application
-          this_rule_application_may_be_memoized = true
-          traditional_rule_application(matcher, current_rule_application)   # line 33 of Algorithm 2
+
+          matcher.growing[rule].delete(pos)
+          GlobalDebug.puts "finishing seed growth for rule #{rule.name} at #{pos} : '#{full_grown_seed_to_return.try(&.syntax_tree) || "nil"}'"
+          full_grown_seed_to_return
         end                                                                 # line 35 of Algorithm 2
 
         # todo: do we need to move this to the end, since later logic depends on the call stack having this recursive call in it?
@@ -516,13 +346,7 @@ module Arborist
         # trees resulting from rule applications within the same context may be memoized and read from the memoization cache, but once
         # the context changes, then any reads must be taken from the part of the cache that corresponds to the rule-in-recursion stack state
         # at which the rule application is being made.
-        #
-        # we want to memoize apply_parse_tree for the current rule at the current position within the context of the current rule-in-recursion
-        # call stack
-        # if !matcher.any_left_recursion_ongoing?
-          # matcher.memoize_result(pos, apply_parse_tree.finishing_pos + 1, @rule_name, apply_parse_tree)
-          matcher.memoize_result(pos, matcher.pos, @rule_name, apply_parse_tree) if this_rule_application_may_be_memoized
-        # end
+        matcher.memoize_result(pos, matcher.pos, @rule_name, apply_parse_tree) if popped_apply_call.safe_to_memoize?
 
         apply_parse_tree
       end
