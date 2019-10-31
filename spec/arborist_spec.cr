@@ -201,6 +201,7 @@ describe Arborist do
       m1 = Matcher.new.add_rule("e", e)
 
       m1.match("5-5-5", "e").try(&.syntax_tree).should eq [["5", "-", "5"], "-", "5"]   # should parse as (((5)-5)-5)
+      m1.match("5-5-5-5-5", "e").try(&.syntax_tree).should eq [[[["5", "-", "5"], "-", "5"], "-", "5"], "-", "5"]   # should parse as (((((5)-5)-5)-5)-5)
     end
 
     it "correctly parses e -> e - e | e + e | num" do
@@ -567,8 +568,16 @@ describe Arborist do
       end
 
       # This test needs some explanation:
+      # 'aaa' should be parsed such that the parse tree reflects a right-associative derivation - (a, (a, a)) - because
+      # even though the first term is left-recursive, a left-associative derivation is impossible due to the rules
+      # of the PEG formalism, specifically, that ordered choice prioritizes the left-most alternatives first, and even though
+      # the `Aa` alternative is listed first, in order for it to match, it must match *in conjunction* with the third
+      # alternative, `a`, which is impossible because the second alternative, `aA`, can match the full string with a right
+      # associative derivation before the third alternative is ever tried. Therefore, even though intution may suggest that
+      # A -> Aa / aA / a should parse the string 'aaa' as ((a, a), a), that cannot happen as long as `aA` precedes `a` in
+      # the sequence of alternatives.
       it "supports separated left- and right-recursion (left-recursion first); produces a right-associative derivation" do
-        # A -> Aa | aA | a
+        # A -> Aa / aA / a
         a = choice(
           seq(
             apply("a"),

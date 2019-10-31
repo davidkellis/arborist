@@ -214,7 +214,7 @@ module Arborist
     # this implements Tratt's Algorithm 2 in section 6.4 of https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
     def eval(matcher) : ParseTree?   # line 3 of Algorithm 2
       GlobalDebug.increment
-      return (GlobalDebug.decrement; nil) if matcher.fail_all_rules?
+      # return (GlobalDebug.decrement; nil) if matcher.fail_all_rules?
 
       rule = matcher.get_rule(@rule_name)
       pos = matcher.pos
@@ -233,27 +233,28 @@ module Arborist
         previous_application_of_rule_at_pos = matcher.lookup_rule_application_in_call_stack(rule, pos)
         
         # if previous_application_of_rule_at_pos != nil, then a previous application of rule `rule` was attempted at position `pos`, 
-        # so this application - once it is performed via a call to #traditional_rule_application - is going to be a left recursive 
+        # so this application - once it is performed via a call to #simple_rule_application - is going to be a left recursive 
         # application of the same rule
         is_this_application_left_recursive_at_pos = !!previous_application_of_rule_at_pos
 
         previous_application_of_rule_at_pos.set_resulted_in_left_recursion(true) if previous_application_of_rule_at_pos
 
-        # look up the most recent left-recursive application of this rule, occurring at any position.
-        # if one is found, then that implies we are already growing a seed for this rule at some position
-        previous_left_recursive_application_of_rule = matcher.lookup_left_recursive_rule_application(rule)
+        # # look up the most recent left-recursive application of this rule, occurring at any position.
+        # # if one is found, then that implies we are already growing a seed for this rule at some position
+        # previous_left_recursive_application_of_rule = matcher.lookup_left_recursive_rule_application(rule)
 
-        # is this rule currently in left recursion anywhere on the application call stack?
-        is_rule_in_left_recursion_anywhere = !!previous_left_recursive_application_of_rule
+        # # is this rule currently in left recursion anywhere on the application call stack?
+        # is_rule_in_left_recursion_anywhere = !!previous_left_recursive_application_of_rule
 
-        # if we're already in left recursion on `rule` and we have a seed growing for `rule` at `pos`, then we are in left recursion on rule `rule` at position `pos`
-        # the name of this identifier is not quite right, but I can't figure out a good name for it - it indicates
-        # that the current application of this rule is 3-calls deep at the current position, because the second call was
-        # the first left recursive call, which would have started a seed growth, and this third call should return the seed
-        growing_seed_for_rule_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
+        # # if we're already in left recursion on `rule` and we have a seed growing for `rule` at `pos`, then we are in left recursion on rule `rule` at position `pos`
+        # # the name of this identifier is not quite right, but I can't figure out a good name for it - it indicates
+        # # that the current application of this rule is 3-calls deep at the current position, because the second call was
+        # # the first left recursive call, which would have started a seed growth, and this third call should return the seed
+        # growing_seed_for_rule_at_current_position = is_rule_in_left_recursion_anywhere && matcher.growing[rule].has_key?(pos)
 
         current_rule_application = push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
-        GlobalDebug.puts "push apply #{@rule_name} (call #{current_rule_application.object_id}) at #{pos} #{is_this_application_left_recursive_at_pos && "; LR" || ""} #{growing_seed_for_rule_at_current_position && ", growing" || ""}"
+        GlobalDebug.puts "push apply #{@rule_name} (call #{current_rule_application.object_id}) at #{pos} #{is_this_application_left_recursive_at_pos && "; LR" || ""}"
+        # GlobalDebug.puts "push apply #{@rule_name} (call #{current_rule_application.object_id}) at #{pos} #{is_this_application_left_recursive_at_pos && "; LR" || ""} #{growing_seed_for_rule_at_current_position && ", growing" || ""}"
 
         parse_tree_from_rule_expr = if is_this_application_left_recursive_at_pos
           # mark all applications between this application and the parent application (excluding the parent) as not safe to memoize
@@ -275,13 +276,13 @@ module Arborist
           # We want to minimally grow the seeds of all other left-recursive rule application of `rule` that occur while we are still
           # growing the seed associated with the first occurrence of a left-recursive rule application of `rule`.
           # This means that the first occurrence of left recursive seed growth for `rule` should continue until it can't grow anymore, but all
-          # other occurrences of left recursive seed growth for `rule` should only grow once level and then fail.
+          # other occurrences of left recursive seed growth for `rule` should only grow one level and then fail.
           #
           # The rule of seed growth is:
           # Only the top-level seed growth for a given rule may allow left recursive calls; deeper-level seed growth on the
           # same rule may not be made up of any left-recursive calls.
 
-          # Here, we are starting to grow a seed on a left-recursive call.
+          # Here, we are starting to grow a seed on a potentially left-recursive call.
           # We can only grow a single seed for a given rule at a time. All other would-be seed-growths for the same rule must fail,
           # in order to ensure the left-most seed growth consumes as much as possible.
           # Therefore, if we detect that this recursive call is a top-level seed growth for `rule`, then we want to grow the seed
@@ -297,11 +298,11 @@ module Arborist
           GlobalDebug.puts "starting seed growth for rule #{rule.name} at #{pos}"
           while true
             matcher.pos = pos
-            parse_tree = traditional_rule_application(matcher, current_rule_application)
+            parse_tree = simple_rule_application(matcher, current_rule_application)
 
             oldest_application_resulting_in_left_recursion = matcher.lookup_oldest_left_recursive_rule_application(rule)
             if current_rule_application.resulted_in_left_recursion? &&                           # we only want to grow the seed bottom up if this application spawned a recursive apply call
-                  oldest_application_resulting_in_left_recursion == current_rule_application     # and we only want to grow the seed on the leftmost/earliest/shallowest application in a call stack that resulted in left recursion on this rule; the subsequent applications of this rule that would have resulted in left recursion should not grow their seed (should not recurse)
+                  oldest_application_resulting_in_left_recursion == current_rule_application     # and we only want to grow the seed on the leftmost/earliest/shallowest application in a call stack that resulted in left recursion on this rule; the subsequent applications of this rule that would have resulted in left recursion should not grow their seed (should not left-recurse)
               seed_parse_tree = matcher.growing[rule][pos]
               GlobalDebug.puts "candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.syntax_tree) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
               if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # we're done growing the seed; it can't grow any further
@@ -328,7 +329,6 @@ module Arborist
           full_grown_seed_to_return
         end                                                                 # line 35 of Algorithm 2
 
-        # todo: do we need to move this to the end, since later logic depends on the call stack having this recursive call in it?
         popped_apply_call = pop_rule_application(matcher)
         # GlobalDebug.puts "call stack apply call count = #{matcher.call_stack_apply_calls.size}"
 
@@ -355,36 +355,10 @@ module Arborist
       top_level_return_parse_tree
     end                                                                   # line 36 of Algorithm 2
 
-    def traditional_rule_application(matcher, current_rule_application) : ParseTree?
+    def simple_rule_application(matcher, current_rule_application) : ParseTree?
       # this logic captures "normal" rule application - no memoization, can't handle left recursion
-      orig_pos = matcher.pos
       rule = matcher.rules[@rule_name]
-
-      parse_tree = rule.expr.eval(matcher)
-
-      # the stuff below is old and should be dropped
-      # # if matcher.fail_all_rules?
-      # #   if current_rule_application == matcher.fail_all_rules_until_this_rule
-      # #     # there is an assumption that if we take this branch, then this `current_rule_application` was the rule application that
-      # #     # was identified as the original non-left-recursive call of `rule`, and therefore it *must* have its seed_parse_tree
-      # #     # set with the parse tree that that matches as much of the input as a left-recursive application of `rule` at `orig_pos`
-      # #     # could possibly match, and therefore we want to return that seed parse tree that had been previously built up.
-      # #     matcher.fail_all_rules_until_this_rule = nil
-      # #     seed_parse_tree = current_rule_application.seed_parse_tree
-      # #     matcher.pos = seed_parse_tree.finishing_pos + 1 if seed_parse_tree
-      # #     seed_parse_tree
-      # #   else
-      # #     return nil   # we need to fail this application because `matcher.fail_all_rules?` mode is enabled
-      # #   end
-
-      # seed_parse_tree = current_rule_application.seed_parse_tree
-      # if seed_parse_tree
-      #   matcher.pos = seed_parse_tree.finishing_pos + 1
-      #   GlobalDebug.puts "returning seed_parse_tree for #{@rule_name} (call #{current_rule_application.object_id}) at #{orig_pos} : '#{seed_parse_tree.syntax_tree}'"
-      #   seed_parse_tree
-      # else
-        parse_tree
-      # end
+      rule.expr.eval(matcher)
     end
 
     def push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
@@ -420,7 +394,7 @@ module Arborist
 
     # returns String | Nil
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(TerminalCall.new(self, matcher.pos))
 
@@ -474,7 +448,7 @@ module Arborist
 
     # returns String | Nil
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(TerminalCall.new(self, matcher.pos))
 
@@ -537,7 +511,8 @@ module Arborist
 
     # returns String | Nil
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules? || @strings.empty?
+      # return nil if matcher.fail_all_rules? || @strings.empty?
+      return nil if @strings.empty?
 
       matcher.push_onto_call_stack(MutexAltCall.new(self, matcher.pos))
 
@@ -590,7 +565,7 @@ module Arborist
     end
 
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(ChoiceCall.new(self, matcher.pos))
 
@@ -599,10 +574,10 @@ module Arborist
       GlobalDebug.puts "try #{to_s} at #{orig_pos}"
 
       @exps.reject {|expr| expr.is_a?(PosLookAhead) || expr.is_a?(NegLookAhead) }.each do |expr|
-        if matcher.fail_all_rules?
-          matcher.pop_off_of_call_stack
-          return nil
-        end
+        # if matcher.fail_all_rules?
+        #   matcher.pop_off_of_call_stack
+        #   return nil
+        # end
         matcher.pos = orig_pos
         parse_tree = expr.eval(matcher)
         if parse_tree
@@ -644,7 +619,7 @@ module Arborist
 
     # returns Array(ParseTree) | Nil
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(SequenceCall.new(self, matcher.pos))
 
@@ -656,7 +631,7 @@ module Arborist
       @exps.each_with_index do |expr, term_index|
         matcher.skip_whitespace_if_in_syntactic_context(expr) if term_index > 0
         parse_tree = expr.eval(matcher)
-        if parse_tree.nil? || matcher.fail_all_rules?
+        if parse_tree.nil?    # || matcher.fail_all_rules?
           matcher.pos = start_pos
           matcher.pop_off_of_call_stack
           GlobalDebug.puts "failed #{to_s} at #{start_pos}"
@@ -700,7 +675,7 @@ module Arborist
 
     # this should return true if the expr does not match, and nil otherwise; do not return false, because nil indicates parse failure
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(NegLookAheadCall.new(self, matcher.pos))
 
@@ -708,7 +683,7 @@ module Arborist
       expr_does_not_match = !@exp.eval(matcher)
       matcher.pos = orig_pos
       matcher.pop_off_of_call_stack
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
       NegLookAheadTree.new(expr_does_not_match, matcher.input, orig_pos).label(@label) if expr_does_not_match
     end
 
@@ -740,7 +715,7 @@ module Arborist
 
     # this should return true if the expr matches, and nil otherwise; do not return false, because nil indicates parse failure
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(PosLookAheadCall.new(self, matcher.pos))
 
@@ -748,7 +723,7 @@ module Arborist
       expr_matches = !!@exp.eval(matcher)
       matcher.pos = orig_pos
       matcher.pop_off_of_call_stack
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
       PosLookAheadTree.new(expr_matches, matcher.input, orig_pos).label(@label) if expr_matches
     end
 
@@ -779,7 +754,7 @@ module Arborist
 
     # returns Array(ParseTree) | Nil
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(OptionalCall.new(self, matcher.pos))
 
@@ -795,7 +770,7 @@ module Arborist
 
       matcher.pop_off_of_call_stack
 
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       OptionalTree.new(parse_tree, matcher.input, orig_pos, matcher.pos - 1).label(@label)
     end
@@ -828,7 +803,7 @@ module Arborist
 
     # returns Array(ParseTree) | Nil
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(RepetitionCall.new(self, matcher.pos))
       
@@ -841,17 +816,17 @@ module Arborist
         matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
         parse_tree = @exp.eval(matcher)
         if parse_tree
-          if matcher.fail_all_rules?
-            matcher.pop_off_of_call_stack
-            return nil
-          end
+          # if matcher.fail_all_rules?
+          #   matcher.pop_off_of_call_stack
+          #   return nil
+          # end
           ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
         else
           matcher.pos = orig_pos
-          if matcher.fail_all_rules?
-            matcher.pop_off_of_call_stack
-            return nil
-          end
+          # if matcher.fail_all_rules?
+          #   matcher.pop_off_of_call_stack
+          #   return nil
+          # end
           break
         end
         term_count += 1
@@ -889,7 +864,7 @@ module Arborist
 
     # returns Array(ParseTree) | Nil
     def eval(matcher) : ParseTree?
-      return nil if matcher.fail_all_rules?
+      # return nil if matcher.fail_all_rules?
 
       matcher.push_onto_call_stack(RepetitionCall.new(self, matcher.pos))
 
@@ -901,17 +876,17 @@ module Arborist
         matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
         parse_tree = @exp.eval(matcher)
         if parse_tree
-          if matcher.fail_all_rules?
-            matcher.pop_off_of_call_stack
-            return nil
-          end
+          # if matcher.fail_all_rules?
+          #   matcher.pop_off_of_call_stack
+          #   return nil
+          # end
           ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
         else
           matcher.pos = orig_pos
-          if matcher.fail_all_rules?
-            matcher.pop_off_of_call_stack
-            return nil
-          end
+          # if matcher.fail_all_rules?
+          #   matcher.pop_off_of_call_stack
+          #   return nil
+          # end
           break
         end
         term_count += 1

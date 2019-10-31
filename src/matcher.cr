@@ -53,33 +53,6 @@ module Arborist
       memo_table = tree_node.memo_table
       col = memo_table[pos]?
       col[rule_name]? if col
-
-
-      # tree_node = lookup_tree_node(rule_in_recursion_call_stack_state)
-      # if tree_node
-      #   memo_table = tree_node.memo_table
-      #   col = memo_table[pos]?
-      #   col[rule_name]? if col
-      # end
-
-
-      # tree_node = self
-      # memo_table = tree_node.memo_table
-      # col = memo_table[pos]?
-      # memo_result = col[rule_name]? if col
-      # return memo_result if memo_result
-
-      # rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-      #   if tree_node.children.has_key?(pos_rule_name_pair)
-      #     tree_node = tree_node.children[pos_rule_name_pair]
-      #     memo_table = tree_node.memo_table
-      #     col = memo_table[pos]?
-      #     memo_result = col[rule_name]? if col
-      #     return memo_result if memo_result
-      #   else
-      #     return nil
-      #   end
-      # end
     end
 
     def local_lookup(pos : Int32, rule_name : String) : MemoResult
@@ -117,14 +90,13 @@ module Arborist
   class Matcher
     include DSL
     
-    # @memoTable : Hash(Int32, Column)
     @memo_tree : MemoTree
     getter input : String
     property pos : Int32
     getter rules : Hash(String, Rule)
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
     property expr_call_stack : Array(ExprCall)
-    property fail_all_rules_until_this_rule : ApplyCall?
+    # property fail_all_rules_until_this_rule : ApplyCall?
     property expr_failures : Hash(Int32, Set(Expr))
 
     def initialize(rules = {} of String => Rule)
@@ -133,11 +105,10 @@ module Arborist
       # these structures are necessary for handling left recursion
       @growing = {} of Rule => Hash(Int32, ParseTree?)
       @expr_call_stack = [] of ExprCall
-      @fail_all_rules_until_this_rule = nil
+      # @fail_all_rules_until_this_rule = nil
       @expr_failures = {} of Int32 => Set(Expr)
 
       @input = ""
-      # @memoTable = {} of Int32 => Column
       @memo_tree = MemoTree.new
       @pos = 0
     end
@@ -192,12 +163,16 @@ module Arborist
       # the next 4 lines implement line 1 of Algorithm 2 from https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
       @growing = {} of Rule => Hash(Int32, ParseTree?)
       @rules.each_value do |rule|
-        @growing[rule] = {} of Int32 => ParseTree?
+        initialize_seed_growing_hash_for_rule(rule)
       end
 
       @expr_call_stack = [] of ExprCall
-      @fail_all_rules_until_this_rule = nil
+      # @fail_all_rules_until_this_rule = nil
       @expr_failures = {} of Int32 => Set(Expr)
+    end
+
+    def initialize_seed_growing_hash_for_rule(rule)
+      @growing[rule] = {} of Int32 => ParseTree?
     end
 
     def add_skip_rule_if_necessary
@@ -274,13 +249,13 @@ module Arborist
       end
     end
 
-    def fail_all_rules_back_to(previous_application_of_rule : ApplyCall)
-      @fail_all_rules_until_this_rule = previous_application_of_rule
-    end
+    # def fail_all_rules_back_to(previous_application_of_rule : ApplyCall)
+    #   @fail_all_rules_until_this_rule = previous_application_of_rule
+    # end
 
-    def fail_all_rules?
-      !!@fail_all_rules_until_this_rule
-    end
+    # def fail_all_rules?
+    #   !!@fail_all_rules_until_this_rule
+    # end
 
     def push_onto_call_stack(expr_application : ExprCall)
       @expr_call_stack.push(expr_application)
@@ -369,8 +344,12 @@ module Arborist
       str
     end
 
-    def add_rule_if_necessary(rule_name : String, expr : Expr)
-      add_rule(rule_name, expr) unless @rules.has_key?(rule_name)
+    def add_rule_while_matching_is_in_progress_if_necessary(rule_name : String, expr : Expr)
+      unless @rules.has_key?(rule_name)
+        add_rule(rule_name, expr)
+        new_rule = get_rule(rule_name)
+        initialize_seed_growing_hash_for_rule(new_rule)
+      end
     end
 
     # The application of the skip rule is internally represented as a parameterized rule, such that the skip rule is specialized
@@ -385,7 +364,7 @@ module Arborist
       # skip_rule_expr = seq(star(apply("skip")), pos(expr))
       
       skip_rule_expr = star(apply("skip"))
-      add_rule_if_necessary(skip_rule_name, skip_rule_expr)
+      add_rule_while_matching_is_in_progress_if_necessary(skip_rule_name, skip_rule_expr)
       
       apply_skip = apply(skip_rule_name)
       # puts "skip start - #{"+" * 100}"
