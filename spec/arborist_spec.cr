@@ -541,7 +541,7 @@ describe Arborist do
         m.match("", "a").try(&.syntax_tree).should be_nil
       end
 
-      it "supports separated left- and right-recursion (right first); producing the left-most derivation" do
+      it "supports separated left- and right-recursion (right-recursion first); produces a right-associative derivation" do
         # A -> aA | Aa | a
         a = choice(
           seq(
@@ -564,7 +564,8 @@ describe Arborist do
         m.match("", "a").try(&.syntax_tree).should be_nil
       end
 
-      it "supports separated left- and right-recursion (left first); producing the left-most derivation" do
+      # This test needs some explanation:
+      it "supports separated left- and right-recursion (left-recursion first); produces a right-associative derivation" do
         # A -> Aa | aA | a
         a = choice(
           seq(
@@ -586,6 +587,33 @@ describe Arborist do
         Arborist::GlobalDebug.disable!
         m.match("aaaa", "a").try(&.syntax_tree).should eq ["a", ["a", ["a", "a"]]]
         m.match("b", "a").try(&.syntax_tree).should be_nil
+        m.match("", "a").try(&.syntax_tree).should be_nil
+      end
+
+      it "supports separated left- and right-recursion (left-recursion first); produces a right-associative derivation" do
+        # A -> B
+        # B -> Bb | bB | b
+        a = apply("b")
+        b = choice(
+          seq(
+            apply("b"),
+            term("b")
+          ),
+          seq(
+            term("b"),
+            apply("b")
+          ),
+          term("b")
+        )
+        m = Matcher.new.add_rule("a", a).add_rule("b", b)
+
+        m.match("b", "a").try(&.syntax_tree).should eq "b"
+        m.match("bb", "a").try(&.syntax_tree).should eq ["b", "b"]
+        # Arborist::GlobalDebug.enable!
+        m.match("bbb", "a").try(&.syntax_tree).should eq ["b", ["b", "b"]]
+        # Arborist::GlobalDebug.disable!
+        m.match("bbbb", "a").try(&.syntax_tree).should eq ["b", ["b", ["b", "b"]]]
+        m.match("a", "a").try(&.syntax_tree).should be_nil
         m.match("", "a").try(&.syntax_tree).should be_nil
       end
 

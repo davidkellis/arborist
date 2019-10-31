@@ -382,6 +382,7 @@ module Arborist
             # if this is a top-level seed growth for `rule`, then do the following:
             matcher.growing[rule][pos] = nil                                  # line 17 of Algorithm 2
             full_grown_seed_to_return = nil
+            GlobalDebug.puts "starting seed growth for rule #{rule.name} at #{pos}"
             while true                                                        # line 18 of Algorithm 2 - this loop switches to a Warth et al.-style iterative bottom-up parser
               # parse_tree = eval(matcher, calling_rule, calling_rule_pos)    # line 19 of Algorithm 2 - this is wrong; we need to apply the rule in traditional style instead
               matcher.pos = pos
@@ -445,7 +446,8 @@ module Arborist
               GlobalDebug.puts "grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
               matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
             end                                                               # line 26 of Algorithm 2
-
+            
+            GlobalDebug.puts "finishing seed growth for rule #{rule.name} at #{pos} : '#{full_grown_seed_to_return.try(&.syntax_tree) || "nil"}'"
             full_grown_seed_to_return
           else
             # This branch should only be executed on an appliation of the same rule at a position farther in the input; 
@@ -536,27 +538,29 @@ module Arborist
 
       parse_tree = rule.expr.eval(matcher)
 
-      # if matcher.fail_all_rules?
-      #   if current_rule_application == matcher.fail_all_rules_until_this_rule
-      #     # there is an assumption that if we take this branch, then this `current_rule_application` was the rule application that
-      #     # was identified as the original non-left-recursive call of `rule`, and therefore it *must* have its seed_parse_tree
-      #     # set with the parse tree that that matches as much of the input as a left-recursive application of `rule` at `orig_pos`
-      #     # could possibly match, and therefore we want to return that seed parse tree that had been previously built up.
-      #     matcher.fail_all_rules_until_this_rule = nil
-      #     seed_parse_tree = current_rule_application.seed_parse_tree
-      #     matcher.pos = seed_parse_tree.finishing_pos + 1 if seed_parse_tree
-      #     seed_parse_tree
-      #   else
-      #     return nil   # we need to fail this application because `matcher.fail_all_rules?` mode is enabled
-      #   end
-      seed_parse_tree = current_rule_application.seed_parse_tree
-      if seed_parse_tree
-        matcher.pos = seed_parse_tree.finishing_pos + 1
-        GlobalDebug.puts "returning seed_parse_tree for #{@rule_name} (call #{current_rule_application.object_id}) at #{orig_pos} : '#{seed_parse_tree.syntax_tree}'"
-        seed_parse_tree
-      else
+      # the stuff below is old and should be dropped
+      # # if matcher.fail_all_rules?
+      # #   if current_rule_application == matcher.fail_all_rules_until_this_rule
+      # #     # there is an assumption that if we take this branch, then this `current_rule_application` was the rule application that
+      # #     # was identified as the original non-left-recursive call of `rule`, and therefore it *must* have its seed_parse_tree
+      # #     # set with the parse tree that that matches as much of the input as a left-recursive application of `rule` at `orig_pos`
+      # #     # could possibly match, and therefore we want to return that seed parse tree that had been previously built up.
+      # #     matcher.fail_all_rules_until_this_rule = nil
+      # #     seed_parse_tree = current_rule_application.seed_parse_tree
+      # #     matcher.pos = seed_parse_tree.finishing_pos + 1 if seed_parse_tree
+      # #     seed_parse_tree
+      # #   else
+      # #     return nil   # we need to fail this application because `matcher.fail_all_rules?` mode is enabled
+      # #   end
+
+      # seed_parse_tree = current_rule_application.seed_parse_tree
+      # if seed_parse_tree
+      #   matcher.pos = seed_parse_tree.finishing_pos + 1
+      #   GlobalDebug.puts "returning seed_parse_tree for #{@rule_name} (call #{current_rule_application.object_id}) at #{orig_pos} : '#{seed_parse_tree.syntax_tree}'"
+      #   seed_parse_tree
+      # else
         parse_tree
-      end
+      # end
     end
 
     def push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
