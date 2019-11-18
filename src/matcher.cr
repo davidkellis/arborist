@@ -89,6 +89,26 @@ module Arborist
   end
 
 
+  class MatchFailure
+    property pos : Int32
+    property expr : Expr
+    property active_rule_name : String
+
+    def initialize(@pos, @expr, @active_rule_name)
+    end
+
+    def hash
+      pos.hash + expr.hash + active_rule_name.hash
+    end
+
+    def ==(other)
+      pos == other.pos &&
+        expr == other.expr &&
+        active_rule_name == other.active_rule_name
+    end
+  end
+
+
   class Matcher
     include DSL
     
@@ -99,7 +119,7 @@ module Arborist
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
     property expr_call_stack : Array(ExprCall)
     # property fail_all_rules_until_this_rule : ApplyCall?
-    property expr_failures : Hash(Int32, Set(Expr))
+    property expr_failures : Hash(Int32, Set(MatchFailure))
 
     def initialize(rules = {} of String => Rule)
       @rules = rules
@@ -108,7 +128,7 @@ module Arborist
       @growing = {} of Rule => Hash(Int32, ParseTree?)
       @expr_call_stack = [] of ExprCall
       # @fail_all_rules_until_this_rule = nil
-      @expr_failures = {} of Int32 => Set(Expr)
+      @expr_failures = {} of Int32 => Set(MatchFailure)
 
       @input = ""
       @memo_tree = MemoTree.new
@@ -170,7 +190,7 @@ module Arborist
 
       @expr_call_stack = [] of ExprCall
       # @fail_all_rules_until_this_rule = nil
-      @expr_failures = {} of Int32 => Set(Expr)
+      @expr_failures = {} of Int32 => Set(MatchFailure)
     end
 
     def initialize_seed_growing_hash_for_rule(rule)
@@ -229,22 +249,25 @@ module Arborist
     # end
 
     def log_match_failure(pos : Int32, expr : Expr) : Nil
-      failures = (@expr_failures[pos] ||= Set(Expr).new)
-      failures << expr
+      match_failure = MatchFailure.new(pos, expr, apply_calls_in_call_stack.last.rule_name)
+      failures = (@expr_failures[pos] ||= Set(MatchFailure).new)
+      failures << match_failure
       nil
     end
 
     def print_match_failure_error
       pos = @expr_failures.keys.max
       if pos
-        failed_exprs = @expr_failures[pos]
+        # failed_exprs = @expr_failures[pos]
+        match_failures = @expr_failures[pos]
         start_pos = [pos - 10, 0].max
         puts "Malformed input fragment at position #{pos+1}:"
         puts @input[start_pos, 40]
         puts "#{"-" * 10}^"
         puts "Expected one of the following expressions to match at position #{pos+1}:"
-        failed_exprs.each do |expr|
-          puts expr.to_s
+        match_failures.each do |match_failure|
+          puts match_failure.active_rule_name
+          puts "  #{match_failure.expr.to_s}"
         end
       else
         puts "No match failures were logged."
