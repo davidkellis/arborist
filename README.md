@@ -18,6 +18,67 @@ be written to a file or piped to another tool for further processing/manipulatio
 in any lanugage so long as it can read the parse tree format (documentation for the parse tree format is coming soon) that Arborist writes out.
 
 
+## Build Command Line Interface
+```bash
+$ crystal build -o arborist src/cli.cr
+$ ls -al ./arborist
+-rwxr-xr-x@ 1 david  staff  3095952 Nov  2 14:26 ./arborist
+```
+
+Alternatively, just run `./build.sh`, which does the same thing as above.
+
+
+## Run Specs
+```bash
+$ crystal spec
+..........................*.....................
+
+Pending:
+  Arborist left-recursion support never matches any phrase for the rule: a = !a 'b' ; see https://github.com/harc/ohm/issues/120
+
+Finished in 3.22 seconds
+48 examples, 0 failures, 0 errors, 1 pending
+```
+
+
+## Profiling
+
+### macOS
+
+#### Instruments
+
+Following the instructions captured in http://www.mikeperham.com/2016/06/24/profiling-crystal-on-osx/:
+1. Install Xcode
+2. Make sure you can run the Instruments tool from within Xcode, as described in https://help.apple.com/instruments/mac/current/#/devc1724975
+3. Do the following:
+   ```bash
+   $ instruments -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist
+   Instruments Trace Complete: ~/projects/arborist/instrumentscli0.trace
+   $ open instrumentscli0.trace
+   # Examine the trace from within the Instruments tool
+   ```
+
+#### dtrace & FlameGraph
+
+Following the instructions captured in https://carol-nichols.com/2017/04/20/rust-profiling-with-dtrace-on-osx/:
+```bash
+$ cd arborist
+$ sudo dtrace -c './arborist -s -g src/grammar.arborist src/grammar.arborist' -o out.stacks -n 'profile-997 /execname == "arborist"/ { @[ustack(100)] = count(); }'
+...
+$ cd ..
+$ git clone https://github.com/brendangregg/FlameGraph.git
+Cloning into 'FlameGraph'...
+remote: Enumerating objects: 25, done.
+remote: Counting objects: 100% (25/25), done.
+remote: Compressing objects: 100% (20/20), done.
+remote: Total 1063 (delta 11), reused 13 (delta 5), pack-reused 1038
+Receiving objects: 100% (1063/1063), 1.88 MiB | 4.19 MiB/s, done.
+Resolving deltas: 100% (606/606), done.
+$ cd FlameGraph
+$ ./stackcollapse.pl ../arborist/out.stacks | ./flamegraph.pl > ~/Downloads/arborist_flamegraph.svg
+# Examine the FlameGraph plot in a web browser (e.g. Firefox) or some other SVG file viewer
+```
+
 ## Usage
 
 ### Command Line Interface

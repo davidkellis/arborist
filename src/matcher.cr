@@ -1,3 +1,5 @@
+require "./dsl"
+
 module Arborist
   class MemoResult
     property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this memoresult exists
@@ -192,17 +194,17 @@ module Arborist
       nil
     end
 
-    # returns the deepest/most-recent left-recursive application of `rule` in the rule application stack
-    def lookup_left_recursive_rule_application(rule) : ApplyCall?
-      i = @expr_call_stack.size - 1
-      while i >= 0
-        expr_application_i = @expr_call_stack[i]
-        i -= 1
-        next unless expr_application_i.is_a?(ApplyCall)
-        return expr_application_i if expr_application_i.rule == rule && expr_application_i.left_recursive?
-      end
-      nil
-    end
+    # # returns the deepest/most-recent left-recursive application of `rule` in the rule application stack
+    # def lookup_left_recursive_rule_application(rule) : ApplyCall?
+    #   i = @expr_call_stack.size - 1
+    #   while i >= 0
+    #     expr_application_i = @expr_call_stack[i]
+    #     i -= 1
+    #     next unless expr_application_i.is_a?(ApplyCall)
+    #     return expr_application_i if expr_application_i.rule == rule && expr_application_i.left_recursive?
+    #   end
+    #   nil
+    # end
 
     # returns the leftmost/earliest/oldest/shallowest application of `rule` in the rule application stack that resulted in left recursion
     def lookup_oldest_left_recursive_rule_application(rule) : ApplyCall?
@@ -213,18 +215,18 @@ module Arborist
       nil
     end
 
-    # consults the rule application stack and returns the deepest/most-recent left-recursive 
-    # application of any rule occuring at position `pos`
-    def lookup_deepest_left_recursive_rule_appliation(pos) : ApplyCall?
-      i = @expr_call_stack.size - 1
-      while i >= 0
-        expr_application_i = @expr_call_stack[i]
-        i -= 1
-        next unless expr_application_i.is_a?(ApplyCall)
-        return expr_application_i if expr_application_i.left_recursive? && expr_application_id.pos == pos
-      end
-      nil
-    end
+    # # consults the rule application stack and returns the deepest/most-recent left-recursive 
+    # # application of any rule occuring at position `pos`
+    # def lookup_deepest_left_recursive_rule_appliation(pos) : ApplyCall?
+    #   i = @expr_call_stack.size - 1
+    #   while i >= 0
+    #     expr_application_i = @expr_call_stack[i]
+    #     i -= 1
+    #     next unless expr_application_i.is_a?(ApplyCall)
+    #     return expr_application_i if expr_application_i.left_recursive? && expr_application_id.pos == pos
+    #   end
+    #   nil
+    # end
 
     def log_match_failure(pos : Int32, expr : Expr) : Nil
       failures = (@expr_failures[pos] ||= Set(Expr).new)
@@ -273,7 +275,7 @@ module Arborist
     end
 
     def memoize_result(pos, next_pos, rule_name, parse_tree : ParseTree?) : MemoResult
-      GlobalDebug.puts "memoizing #{rule_name} at #{pos}-#{next_pos} with rule_in_recursion_call_stack_state=#{rule_in_recursion_call_stack_state} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
+      # GlobalDebug.puts "memoizing #{rule_name} at #{pos}-#{next_pos} with rule_in_recursion_call_stack_state=#{rule_in_recursion_call_stack_state} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
       @memo_tree.add(rule_in_recursion_call_stack_state, pos, rule_name, MemoResult.new(parse_tree, next_pos))
       # col = (@memoTable[pos] ||= {} of String => MemoResult)
       # col[rule_name] = MemoResult.new(parse_tree, next_pos)

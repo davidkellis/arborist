@@ -13,6 +13,7 @@ module Arborist
       alt(alternatives.to_a)
     end
 
+    # this is where a lot of time is spent
     def alt(alts : Array(String | Expr)) : Expr
       strings = Set(String).new
       alts.map do |alt|

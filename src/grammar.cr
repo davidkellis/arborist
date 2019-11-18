@@ -1,4 +1,5 @@
 require "./arborist"
+require "./matcher"
 require "./grammar_rules"
 require "./grammar_semantics"
 
@@ -56,6 +57,13 @@ module Arborist
       raise "No grammar definition has been loaded. Please load a grammar definition before trying to parse." unless matcher
       
       matcher.match(input_str)
+    end
+
+    def parse(input_str : String, start_rule : String) : ParseTree?
+      matcher = @matcher
+      raise "No grammar definition has been loaded. Please load a grammar definition before trying to parse." unless matcher
+      
+      matcher.match(input_str, start_rule)
     end
 
     def rules

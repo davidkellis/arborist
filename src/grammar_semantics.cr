@@ -1,4 +1,5 @@
 require "./arborist"
+require "./matcher"
 require "./dsl"
 
 module Arborist
@@ -374,6 +375,7 @@ module Arborist
         # A MutexAlt application represents a set of terminals of the same length (implied by the 
         # presence of "|" operators, and therefore alternatives), so we want to build up a MutexAlt
         # and then return it
+        # this is where a good chunk of time is spent, which calls dsl.cr:22
         visitor.on("MutexAlt") do |parse_tree|
           mutex_alt_term_parse_trees = parse_tree.captures("mutexAltTerm").map(&.as(ApplyTree))
           mutex_alts = mutex_alt_term_parse_trees.map do |apply_tree|

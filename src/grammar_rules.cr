@@ -1,4 +1,5 @@
 require "./arborist"
+require "./matcher"
 require "./dsl"
 
 module Arborist
@@ -16,8 +17,8 @@ module Arborist
       #   = ident "{" Rule* "}"
       #   / Rule*
       Grammar = choice(
-        seq(apply("ident"), term("{"), star(apply("Rule")), term("}")).label("named"),
-        star(apply("Rule")).label("unnamed")
+        seq(star(apply("space")), apply("ident"), term("{"), star(apply("Rule")), term("}")).label("named"),
+        seq(star(apply("space")), star(apply("Rule"))).label("unnamed")
       )
 
       Rule = seq(apply("ident"), term("<-"), apply("RuleBody")).label("define")

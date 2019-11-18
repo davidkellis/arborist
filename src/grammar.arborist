@@ -1,13 +1,13 @@
-// The Arborist PEG definition language is a derivation of the Ohm PEG definition langauge.
-// The Ohm PEG definition language is documented at https://github.com/harc/ohm/blob/master/src/ohm-grammar.ohm
-// The Arborist language adds capture/match labels and the dot operator, and removes (1) parameterized rules, 
-// (2) the lexification operator, and (3) grammar inheritance.
-// If it becomes painful to write grammars without (1), (2), or (3), I will add the necessary missing feature back in.
+# The Arborist PEG definition language is a derivation of the Ohm PEG definition langauge.
+# The Ohm PEG definition language is documented at https://github.com/harc/ohm/blob/master/src/ohm-grammar.ohm
+# The Arborist language adds capture/match labels and the dot operator, and removes (1) parameterized rules, 
+# (2) the lexification operator, and (3) grammar inheritance.
+# If it becomes painful to write grammars without (1), (2), or (3), I will add the necessary missing feature back in.
 
 Arborist {
   Grammar
-    <- ident "{" Rule* "}"    -- named
-    / Rule*                   -- unnamed
+    <- space* ident "{" Rule* "}"    -- named
+    / space* Rule*                   -- unnamed
   
   Rule
     <- ident "<-" RuleBody

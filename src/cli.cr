@@ -14,6 +14,8 @@ def run(grammar_file_path, input_file_path, print_mode)
       puts parse_tree.s_exp
     when :binary
       STDOUT.write(Arborist::ParseTree.to_msgpack(parse_tree))
+    when :recognize_only
+      puts "Parsed successfully."
     end
   else
     grammar.print_match_failure_error
@@ -37,12 +39,13 @@ def main
   args = [] of String
   print_mode = :binary
 
-  OptionParser.parse! do |parser|
-    parser.banner = "Usage: arborist -e grammar_file.g file_to_parse.ext"
+  OptionParser.parse do |parser|
+    parser.banner = "Usage: arborist -g grammar_file.g file_to_parse.ext"
     parser.on("-d", "Enable debug mode.") { Config.debug = true }
     parser.on("-g grammar_file.g", "Specifies the grammar file") { |file_name| Config.grammar_file = file_name }
     parser.on("-h", "--help", "Show this help") { puts parser; exit }
     parser.on("-s", "Print the parse tree as an s-expression. (default is binary mode)") { print_mode = :sexp }
+    parser.on("-r", "Recognize only; do not print the parse tree. (default is binary mode)") { print_mode = :recognize_only }
     parser.invalid_option do |flag|
       STDERR.puts "ERROR: #{flag} is not a valid option."
       STDERR.puts parser
