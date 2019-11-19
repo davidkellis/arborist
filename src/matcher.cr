@@ -265,9 +265,11 @@ module Arborist
         puts @input[start_pos, 40]
         puts "#{"-" * 10}^"
         puts "Expected one of the following expressions to match at position #{pos+1}:"
-        match_failures.each do |match_failure|
-          puts match_failure.active_rule_name
-          puts "  #{match_failure.expr.to_s}"
+        match_failures.group_by(&.active_rule_name).each do |active_rule_name, match_failures_for_rule|
+          puts active_rule_name
+          match_failures_for_rule.each do |match_failure|
+            puts "  #{match_failure.expr.to_s}"
+          end
         end
       else
         puts "No match failures were logged."
