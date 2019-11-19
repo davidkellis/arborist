@@ -98,7 +98,7 @@ module Arborist
     end
 
     def hash
-      pos.hash + expr.hash + active_rule_name.hash
+      pos.hash ^ expr.hash ^ active_rule_name.hash
     end
 
     def ==(other)
