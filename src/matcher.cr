@@ -300,7 +300,7 @@ module Arborist
     end
 
     def memoize_result(pos, next_pos, rule_name, parse_tree : ParseTree?) : MemoResult
-      # GlobalDebug.puts "memoizing #{rule_name} at #{pos}-#{next_pos} with rule_in_recursion_call_stack_state=#{rule_in_recursion_call_stack_state} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
+      GlobalDebug.puts "memoizing #{rule_name} at #{pos}-#{next_pos} with rule_in_recursion_call_stack_state=#{rule_in_recursion_call_stack_state} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
       @memo_tree.add(rule_in_recursion_call_stack_state, pos, rule_name, MemoResult.new(parse_tree, next_pos))
       # col = (@memoTable[pos] ||= {} of String => MemoResult)
       # col[rule_name] = MemoResult.new(parse_tree, next_pos)
