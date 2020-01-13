@@ -93,8 +93,10 @@ module Arborist
     property pos : Int32
     property expr : Expr
     property active_rule_name : String
+    property apply_calls_in_call_stack : Array(ApplyCall)
 
-    def initialize(@pos, @expr, @active_rule_name)
+    def initialize(@pos, @expr, @apply_calls_in_call_stack)
+      @active_rule_name = @apply_calls_in_call_stack.last.rule_name
     end
 
     def hash
@@ -120,6 +122,7 @@ module Arborist
     property expr_call_stack : Array(ExprCall)
     # property fail_all_rules_until_this_rule : ApplyCall?
     property expr_failures : Hash(Int32, Set(MatchFailure))
+    property seed_growth_controller : SeedGrowthController
 
     def initialize(rules = {} of String => Rule)
       @rules = rules
@@ -129,12 +132,13 @@ module Arborist
       @expr_call_stack = [] of ExprCall
       # @fail_all_rules_until_this_rule = nil
       @expr_failures = {} of Int32 => Set(MatchFailure)
+      @seed_growth_controller = SeedGrowthController.new
 
       @input = ""
       @memo_tree = MemoTree.new
       @pos = 0
     end
-
+    
     def call_stack
       expr_call_stack
     end
@@ -191,6 +195,7 @@ module Arborist
       @expr_call_stack = [] of ExprCall
       # @fail_all_rules_until_this_rule = nil
       @expr_failures = {} of Int32 => Set(MatchFailure)
+      @seed_growth_controller.reset
     end
 
     def initialize_seed_growing_hash_for_rule(rule)
@@ -214,6 +219,18 @@ module Arborist
       nil
     end
 
+    # returns the deepest/most-recent application of `rule` in the rule application stack
+    def lookup_most_recent_rule_application_in_call_stack(rule) : ApplyCall?
+      i = @expr_call_stack.size - 1
+      while i >= 0
+        expr_application_i = @expr_call_stack[i]
+        i -= 1
+        next unless expr_application_i.is_a?(ApplyCall)
+        return expr_application_i if expr_application_i.rule == rule
+      end
+      nil
+    end
+
     # # returns the deepest/most-recent left-recursive application of `rule` in the rule application stack
     # def lookup_left_recursive_rule_application(rule) : ApplyCall?
     #   i = @expr_call_stack.size - 1
@@ -227,7 +244,7 @@ module Arborist
     # end
 
     # returns the leftmost/earliest/oldest/shallowest application of `rule` in the rule application stack that resulted in left recursion
-    def lookup_oldest_left_recursive_rule_application(rule) : ApplyCall?
+    def lookup_oldest_rule_application_that_resulted_in_left_recursion(rule) : ApplyCall?
       @expr_call_stack.each do |expr_application|
         next unless expr_application.is_a?(ApplyCall)
         return expr_application if expr_application.rule == rule && expr_application.resulted_in_left_recursion?
@@ -249,7 +266,7 @@ module Arborist
     # end
 
     def log_match_failure(pos : Int32, expr : Expr) : Nil
-      match_failure = MatchFailure.new(pos, expr, apply_calls_in_call_stack.last.rule_name)
+      match_failure = MatchFailure.new(pos, expr, apply_calls_in_call_stack)
       failures = (@expr_failures[pos] ||= Set(MatchFailure).new)
       failures << match_failure
       nil
@@ -258,17 +275,72 @@ module Arborist
     def print_match_failure_error
       pos = @expr_failures.keys.max
       if pos
-        # failed_exprs = @expr_failures[pos]
         match_failures = @expr_failures[pos]
-        start_pos = [pos - 10, 0].max
-        puts "Malformed input fragment at position #{pos+1}:"
-        puts @input[start_pos, 40]
-        puts "#{"-" * 10}^"
-        puts "Expected one of the following expressions to match at position #{pos+1}:"
+
+        input_length_up_to_and_including_error_char = pos + 1
+        input_up_to_error = @input[0, input_length_up_to_and_including_error_char]
+        lines_up_to_error = input_up_to_error.lines(false)
+        error_position_line_number = lines_up_to_error.size
+        lines_up_to_error.pop   # drop the last line
+        character_total_prior_to_error_line = lines_up_to_error.reduce(0) do |memo, line|
+          memo + line.each_char.size
+        end
+        error_position_on_line = input_length_up_to_and_including_error_char - character_total_prior_to_error_line
+        puts "Malformed input fragment on line #{error_position_line_number} char #{error_position_on_line} ; at position #{pos+1} (character index #{pos}):"
+        
+
+        context_length = 40           # this should be an even number
+        context_half_length = context_length // 2
+        start_pos = [pos - context_half_length, 0].max
+        length_of_context_up_to_and_including_error = pos - start_pos + 1
+        error_context = @input[start_pos, context_length]
+
+        char_count = 0
+        need_to_print_error_indicator_line = true
+        error_context.lines(false).each do |line|
+          character_total_prior_to_error_line = char_count
+          print line
+          puts("") if line[-1] != '\n'
+          char_count += line.size
+
+          if need_to_print_error_indicator_line && char_count >= length_of_context_up_to_and_including_error
+            need_to_print_error_indicator_line = false
+
+            error_position_on_error_line = length_of_context_up_to_and_including_error - character_total_prior_to_error_line - 1
+            puts "#{"-" * error_position_on_error_line}^"
+          end
+        end
+
+
+        # context_up_to_error = error_context[0, length_of_context_up_to_and_including_error]
+        # context_after_error = error_context[length_of_context_up_to_and_including_error..-1]
+        # lines_up_to_error = context_up_to_error.lines(false)
+        # error_line = lines_up_to_error.pop
+
+        # character_total_prior_to_error_line = lines_up_to_error.reduce(0) do |memo, line|
+        #   memo + line.each_char.size
+        # end
+        # error_position_on_line = length_of_context_up_to_and_including_error - character_total_prior_to_error_line
+
+        # lines_up_to_error.each {|line| print line }
+        # puts error_line
+        # puts "#{"-" * error_position_on_line}^"
+
+
+        # puts @input[start_pos, 40]
+        # puts "#{"-" * context_length}^"
+
+        puts "Expected one of the following expressions to match on line #{error_position_line_number} char #{error_position_on_line} ; at position #{pos+1} (character index #{pos}):"
         match_failures.group_by(&.active_rule_name).each do |active_rule_name, match_failures_for_rule|
           puts active_rule_name
-          match_failures_for_rule.each do |match_failure|
-            puts "  #{match_failure.expr.to_s}"
+          match_failures_for_rule.each_with_index do |match_failure, index|
+            puts "  #{index + 1}. #{match_failure.expr.to_s}"
+            space_prefix = "  #{" " * (index + 1).to_s.size}  "
+            apply_call_tree = match_failure.apply_calls_in_call_stack.map_with_index do |apply_call, apply_call_index|
+              "#{space_prefix}#{apply_call.pos} - #{apply_call.rule_name}"
+              # "#{space_prefix}#{"  " * apply_call_index}#{apply_call.pos} - #{apply_call.rule_name}"
+            end.join("\n")
+            puts apply_call_tree
           end
         end
       else
@@ -286,24 +358,23 @@ module Arborist
 
     def push_onto_call_stack(expr_application : ExprCall)
       @expr_call_stack.push(expr_application)
+      seed_growth_controller.push_onto_call_stack(expr_application)
       expr_application
     end
 
-    def pop_off_of_call_stack() : ExprCall
+    def pop_off_of_call_stack(the_top_of_stack_expr_call_successfully_parsed : Bool) : ExprCall
+      seed_growth_controller.current_expr_call_failed unless the_top_of_stack_expr_call_successfully_parsed
+      seed_growth_controller.pop_off_of_call_stack()
       @expr_call_stack.pop
     end
 
     def has_memoized_result?(rule_name) : Bool
       @memo_tree.exist?(rule_in_recursion_call_stack_state, @pos, rule_name)
-      # col = @memoTable[@pos]?
-      # !!col && col.has_key?(rule_name)
     end
 
     def memoize_result(pos, next_pos, rule_name, parse_tree : ParseTree?) : MemoResult
       GlobalDebug.puts "memoizing #{rule_name} at #{pos}-#{next_pos} with rule_in_recursion_call_stack_state=#{rule_in_recursion_call_stack_state} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
       @memo_tree.add(rule_in_recursion_call_stack_state, pos, rule_name, MemoResult.new(parse_tree, next_pos))
-      # col = (@memoTable[pos] ||= {} of String => MemoResult)
-      # col[rule_name] = MemoResult.new(parse_tree, next_pos)
     end
 
     def use_memoized_result(rule_name) : ParseTree?
@@ -312,10 +383,6 @@ module Arborist
         @pos = memo_result.next_pos
         memo_result.parse_tree
       end
-      # col = @memoTable[@pos]
-      # memo_result = col[rule_name]
-      # @pos = memo_result.next_pos
-      # memo_result.parse_tree
     end
 
     # this method marks all ApplyCall calls on the call stack occurring more recent than oldest_application as unsafe to memoize
@@ -341,6 +408,11 @@ module Arborist
     def rule_in_recursion_call_stack_state : Array({Int32, String})
       apply_calls_that_resulted_in_left_recursion.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
     end
+
+    # def should_current_rule_application_grow_seed_maximally?(current_rule_application)
+    #   # either (1) no ancestor rule application of the same rule resulted in left recursion
+    #   #     OR (2) the deepest ancestor rule application of the same rule resulted in left recursion and 
+    # end
 
     # def any_left_recursion_ongoing? : Bool
     #   apply_calls = @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) }.map(&.as(ApplyCall))

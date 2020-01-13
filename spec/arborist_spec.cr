@@ -204,7 +204,22 @@ describe Arborist do
       m1.match("5-5-5-5-5", "e").try(&.syntax_tree).should eq [[[["5", "-", "5"], "-", "5"], "-", "5"], "-", "5"]   # should parse as (((((5)-5)-5)-5)-5)
     end
 
-    it "correctly parses e -> e - e | e + e | num" do
+    it "correctly parses e -> e + m / m ; m -> m * m / num" do
+      # e -> e + m / m
+      # m -> m * m / num
+      # num -> [0-9]+
+      e = choice(seq(apply("e"), term("+"), apply("m")),
+                 apply("m") )
+      m = choice(seq(apply("m"), term("*"), apply("m")),
+                 apply("num") )
+      num = plus(range('0'..'9'))
+      m1 = Matcher.new.add_rule("e", e).add_rule("m", m).add_rule("num", num)
+
+      # 1+2*3+4*5 should parse as ((1+(2*3))+(4*5))
+      m1.match("1+2*3+4*5", "e").try(&.syntax_tree).should eq [[["1"], "+", [["2"], "*", ["3"]]], "+", [["4"], "*", ["5"]]]
+    end
+
+    it "correctly parses e -> e + e | e * e | num" do
       # e -> e - e | e + e | num
       # num -> [0-9]+
       e = choice(seq(apply("e"), term("-"), apply("e")), 
@@ -245,6 +260,49 @@ describe Arborist do
       m1.match("b").try(&.syntax_tree).should be_nil
       m1.match("bb").try(&.syntax_tree).should be_nil
       m1.match("a").try(&.syntax_tree).should be_nil
+    end
+
+    describe "handles left recursion edge cases" do
+      it "correctly recognizes `(1+2)` with grammar: e -> e + e / '(' e ')' / 1 / 2" do
+        e = choice(
+          seq(apply("e"), term("+"), apply("e")),
+          seq(term("("), apply("e"), term(")")),
+          term("1"),
+          term("2")
+        )
+        m = Matcher.new.add_rule("e", e)
+
+        # (1+2)
+        # Arborist::GlobalDebug.enable!
+        m.match("(1+2)", "e").try(&.syntax_tree).should eq ["(", ["1", "+", "2"], ")"]
+        # Arborist::GlobalDebug.disable!
+      end
+
+      it "correctly recognizes `((2-1-1)-1-2-1-(2-2-1))` with grammar: e -> e - e / '(' e ')' / 1 / 2" do
+        e = choice(
+          seq(apply("e"), term("-"), apply("e")),
+          seq(term("("), apply("e"), term(")")),
+          term("1"),
+          term("2")
+        )
+        m = Matcher.new.add_rule("e", e)
+
+        # ((2-1-1)-1-2-1-(2-2-1))
+        m.match("((2-1-1)-1-2-1-(2-2-1))", "e").try(&.syntax_tree).should eq \
+          ["(", 
+            [
+              [ [ [ ["(", [ ["2", "-", "1"], "-", "1"], ")"],
+                    "-",
+                    "1" ],
+                  "-", 
+                  "2" ],
+                "-",
+                "1" ],
+              "-",
+              ["(", [ ["2", "-", "2"], "-", "1"], ")"]
+            ],
+          ")"]
+      end
     end
 
     # See https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
@@ -532,14 +590,25 @@ describe Arborist do
         )
         m = Matcher.new.add_rule("a", a)
 
+        # this test grammar is also implemented in arborist/antlr4/A.g4
+        # test it like:
+        # arborist/antlr4 ❯ antlr4 A1.g4
+        # arborist/antlr4 ❯ javac A1*.java
+        # arborist/antlr4 ❯ echo baa | grun A a -tree
+        # line 1:3 token recognition error at: '\n'
+        # line 2:0 no viable alternative at input '<EOF>'
+        # (a b (a (a a) (a a)))
+
         m.match("a", "a").try(&.syntax_tree).should eq "a"
         m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
         m.match("aaa", "a").try(&.syntax_tree).should eq [["a", "a"], "a"]
-        m.match("aaaa", "a").try(&.syntax_tree).should eq [[["a", "a"], "a"], "a"]
+        m.match("aaaa", "a").try(&.syntax_tree).should eq [[["a", "a"], "a"], "a"]    # parses like Antlr4: (a (a (a (a a) (a a)) (a a)) (a a))
         m.match("ba", "a").try(&.syntax_tree).should eq ["b", "a"]
-        m.match("baa", "a").try(&.syntax_tree).should eq [["b", "a"], "a"]
+        # Arborist::GlobalDebug.enable!
+        m.match("baa", "a").try(&.syntax_tree).should eq ["b", ["a", "a"]]            # parses like Antlr4: (a b (a (a a) (a a)))
+        # Arborist::GlobalDebug.disable!
         m.match("bba", "a").try(&.syntax_tree).should eq ["b", ["b", "a"]]
-        m.match("bbaa", "a").try(&.syntax_tree).should eq [["b", ["b", "a"]], "a"]
+        m.match("bbaa", "a").try(&.syntax_tree).should eq ["b", ["b", ["a", "a"]]]    # parses like Antlr4: (a b (a b (a (a a) (a a))))
         m.match("b", "a").try(&.syntax_tree).should be_nil
         m.match("", "a").try(&.syntax_tree).should be_nil
       end

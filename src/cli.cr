@@ -7,6 +7,7 @@ def run(grammar_file_path, input_file_path, print_mode)
   # puts "loading grammar:"
   grammar = Arborist::Grammar.new(grammar_file_path)
   # puts "parsing input file:"
+  Arborist::GlobalDebug.enable! if Config.debug
   parse_tree = grammar.parse_file(input_file_path)
   if parse_tree
     case print_mode
