@@ -536,6 +536,15 @@ describe Arborist do
       it "supports nested left recursion" do
         # A -> Aa | a
         # B -> Bb | A
+
+        # this test grammar is also implemented in arborist/antlr4/AB1.g4
+        # test it like:
+        # arborist/antlr4 ❯ antlr4 AB1.g4
+        # arborist/antlr4 ❯ javac AB1*.java
+        # arborist/antlr4 ❯ echo abbb | grun AB1 b -tree
+        # line 1:4 token recognition error at: '\n'
+        # (b (b (b (b (a a)) b) b) b)
+
         a = choice(
           seq(
             apply("a"),
@@ -552,10 +561,10 @@ describe Arborist do
         )
         m = Matcher.new.add_rule("a", a).add_rule("b", b)
 
-        m.match("ab", "b").try(&.syntax_tree).should eq ["a", "b"]
-        m.match("aaab", "b").try(&.syntax_tree).should eq [[["a", "a"], "a"], "b"]
-        m.match("abbb", "b").try(&.syntax_tree).should eq [[["a", "b"], "b"], "b"]
-        m.match("aaabbb", "b").try(&.syntax_tree).should eq [[[[["a", "a"], "a"], "b"], "b"], "b"]
+        m.match("ab", "b").try(&.syntax_tree).should eq ["a", "b"]                        # antlr4: (b (b (a a)) b)
+        m.match("aaab", "b").try(&.syntax_tree).should eq [[["a", "a"], "a"], "b"]        # antlr4: (b (b (a (a (a a) a) a)) b)
+        m.match("abbb", "b").try(&.syntax_tree).should eq [[["a", "b"], "b"], "b"]        # antlr4: (b (b (b (b (a a)) b) b) b)
+        m.match("aaabbb", "b").try(&.syntax_tree).should eq [[[[["a", "a"], "a"], "b"], "b"], "b"]    # antlr4: (b (b (b (b (a (a (a a) a) a)) b) b) b)
       end
 
       it "supports simple left- and right- recursive rules (and is left-associative)" do
@@ -577,6 +586,16 @@ describe Arborist do
 
       it "supports left- and right-recursion + right-recursion; producing the left-most derivation" do
         # A -> AA | bA | a
+
+        # this test grammar is also implemented in arborist/antlr4/A1.g4
+        # test it like:
+        # arborist/antlr4 ❯ antlr4 A1.g4
+        # arborist/antlr4 ❯ javac A1*.java
+        # arborist/antlr4 ❯ echo baa | grun A1 a -tree
+        # line 1:3 token recognition error at: '\n'
+        # line 2:0 no viable alternative at input '<EOF>'
+        # (a b (a (a a) (a a)))
+
         a = choice(
           seq(
             apply("a"),
@@ -589,15 +608,6 @@ describe Arborist do
           term("a")
         )
         m = Matcher.new.add_rule("a", a)
-
-        # this test grammar is also implemented in arborist/antlr4/A.g4
-        # test it like:
-        # arborist/antlr4 ❯ antlr4 A1.g4
-        # arborist/antlr4 ❯ javac A1*.java
-        # arborist/antlr4 ❯ echo baa | grun A a -tree
-        # line 1:3 token recognition error at: '\n'
-        # line 2:0 no viable alternative at input '<EOF>'
-        # (a b (a (a a) (a a)))
 
         m.match("a", "a").try(&.syntax_tree).should eq "a"
         m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
@@ -615,6 +625,16 @@ describe Arborist do
 
       it "supports separated left- and right-recursion (right-recursion first); produces a right-associative derivation" do
         # A -> aA | Aa | a
+
+        # this test grammar is also implemented in arborist/antlr4/A2.g4
+        # test it like:
+        # arborist/antlr4 ❯ antlr4 A2.g4
+        # arborist/antlr4 ❯ javac A2*.java
+        # arborist/antlr4 ❯ echo aaaa | grun A2 a -tree
+        # line 1:4 token recognition error at: '\n'
+        # line 2:0 no viable alternative at input '<EOF>'
+        # (a a (a a (a a (a a))))
+        
         a = choice(
           seq(
             term("a"),
@@ -647,6 +667,16 @@ describe Arborist do
       # the sequence of alternatives.
       it "supports separated left- and right-recursion (left-recursion first); produces a right-associative derivation" do
         # A -> Aa / aA / a
+
+        # this test grammar is also implemented in arborist/antlr4/A3.g4
+        # test it like:
+        # arborist/antlr4 ❯ antlr4 A3.g4
+        # arborist/antlr4 ❯ javac A3*.java
+        # arborist/antlr4 ❯ echo aaaa | grun A3 a -tree
+        # line 1:4 token recognition error at: '\n'
+        # line 2:0 no viable alternative at input '<EOF>'
+        # (a a (a a (a a (a a) <EOF>) <EOF>) <EOF>)
+
         a = choice(
           seq(
             apply("a"),
