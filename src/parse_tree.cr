@@ -70,6 +70,10 @@ module Arborist
       raise "ParseTree#s_exp is an abstract method"
     end
 
+    def simple_s_exp() : String
+      raise "ParseTree#simple_s_exp is an abstract method"
+    end
+
     # Each ParseTree node is represented with the following structure:
     # <node type (ApplyTree | TerminalTree | ...)>
     # <node ID>
@@ -270,6 +274,10 @@ module Arborist
       "#{prefix}(apply #{rule_name} ; id=#{object_id} rule_name=\"#{rule_name}\" label=\"#{label}\"\n#{tree.s_exp(indent+2)})"
     end
 
+    def simple_s_exp() : String
+      "(#{rule_name} #{tree.simple_s_exp()})"
+    end
+
     def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
       rule_name.to_msgpack(packer)
     end
@@ -305,6 +313,10 @@ module Arborist
       "#{prefix}(choice ; id=#{object_id} label=\"#{label}\"\n#{tree.s_exp(indent+2)})"
     end
 
+    def simple_s_exp() : String
+      tree.simple_s_exp()
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -335,6 +347,12 @@ module Arborist
       "#{prefix}(seq ; id=#{object_id} label=\"#{label}\"\n#{seq.map(&.s_exp(indent+2)).join("\n")})"
     end
 
+    def simple_s_exp() : String
+      terms = [] of String
+      seq.each {|pt| term = pt.simple_s_exp(); terms << term unless term.blank? }
+      terms.join(" ")
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -360,6 +378,10 @@ module Arborist
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
       "#{prefix}\"#{@str}\"[id=#{object_id} label=\"#{label}\"]"
+    end
+
+    def simple_s_exp() : String
+      @str
     end
 
     def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
@@ -397,6 +419,10 @@ module Arborist
       "#{prefix}\"#{@str}\"MA[id=#{object_id} label=\"#{label}\"]"
     end
 
+    def simple_s_exp() : String
+      @str
+    end
+
     def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
       str.to_msgpack(packer)
     end
@@ -432,6 +458,10 @@ module Arborist
       raise "NegLookAheadTree#s_exp undefined"
     end
 
+    def simple_s_exp() : String
+      raise "NegLookAheadTree#simple_s_exp undefined"
+    end
+
     def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
       raise "NegLookAheadTree#parse_tree_type_specific_attributes_to_msgpack undefined"
     end
@@ -461,6 +491,10 @@ module Arborist
 
     def s_exp(indent : Int32 = 0) : String
       raise "PosLookAheadTree#s_exp undefined"
+    end
+
+    def simple_s_exp() : String
+      raise "PosLookAheadTree#simple_s_exp undefined"
     end
 
     def parse_tree_type_specific_attributes_to_msgpack(packer : MessagePack::Packer)
@@ -499,6 +533,10 @@ module Arborist
       end
     end
 
+    def simple_s_exp() : String
+      @tree.try(&.simple_s_exp()) || ""
+    end
+
     # query methods
 
     def children : Array(ParseTree)
@@ -524,6 +562,10 @@ module Arborist
     def s_exp(indent : Int32 = 0) : String
       prefix = " " * indent
       "#{prefix}(repeat ; id=#{object_id} label=\"#{label}\"\n#{trees.map(&.s_exp(indent+2)).join("\n")})"
+    end
+
+    def simple_s_exp() : String
+      trees.map {|n| n.simple_s_exp() }.join(" ")
     end
 
     # query methods

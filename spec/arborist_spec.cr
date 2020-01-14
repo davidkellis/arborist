@@ -562,9 +562,13 @@ describe Arborist do
         m = Matcher.new.add_rule("a", a).add_rule("b", b)
 
         m.match("ab", "b").try(&.syntax_tree).should eq ["a", "b"]                        # antlr4: (b (b (a a)) b)
+        m.match("ab", "b").try(&.simple_s_exp).should eq "(b (b (a a)) b)"
         m.match("aaab", "b").try(&.syntax_tree).should eq [[["a", "a"], "a"], "b"]        # antlr4: (b (b (a (a (a a) a) a)) b)
+        m.match("aaab", "b").try(&.simple_s_exp).should eq "(b (b (a (a (a a) a) a)) b)"
         m.match("abbb", "b").try(&.syntax_tree).should eq [[["a", "b"], "b"], "b"]        # antlr4: (b (b (b (b (a a)) b) b) b)
+        m.match("abbb", "b").try(&.simple_s_exp).should eq "(b (b (b (b (a a)) b) b) b)"
         m.match("aaabbb", "b").try(&.syntax_tree).should eq [[[[["a", "a"], "a"], "b"], "b"], "b"]    # antlr4: (b (b (b (b (a (a (a a) a) a)) b) b) b)
+        m.match("aaabbb", "b").try(&.simple_s_exp).should eq "(b (b (b (b (a (a (a a) a) a)) b) b) b)"
       end
 
       it "supports simple left- and right- recursive rules (and is left-associative)" do
@@ -610,15 +614,19 @@ describe Arborist do
         m = Matcher.new.add_rule("a", a)
 
         m.match("a", "a").try(&.syntax_tree).should eq "a"
+        m.match("a", "a").try(&.simple_s_exp).should eq "(a a)"
         m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
         m.match("aaa", "a").try(&.syntax_tree).should eq [["a", "a"], "a"]
         m.match("aaaa", "a").try(&.syntax_tree).should eq [[["a", "a"], "a"], "a"]    # parses like Antlr4: (a (a (a (a a) (a a)) (a a)) (a a))
+        m.match("aaaa", "a").try(&.simple_s_exp).should eq "(a (a (a (a a) (a a)) (a a)) (a a))"
         m.match("ba", "a").try(&.syntax_tree).should eq ["b", "a"]
         # Arborist::GlobalDebug.enable!
         m.match("baa", "a").try(&.syntax_tree).should eq ["b", ["a", "a"]]            # parses like Antlr4: (a b (a (a a) (a a)))
+        m.match("baa", "a").try(&.simple_s_exp).should eq "(a b (a (a a) (a a)))"
         # Arborist::GlobalDebug.disable!
         m.match("bba", "a").try(&.syntax_tree).should eq ["b", ["b", "a"]]
         m.match("bbaa", "a").try(&.syntax_tree).should eq ["b", ["b", ["a", "a"]]]    # parses like Antlr4: (a b (a b (a (a a) (a a))))
+        m.match("bbaa", "a").try(&.simple_s_exp).should eq "(a b (a b (a (a a) (a a))))"
         m.match("b", "a").try(&.syntax_tree).should be_nil
         m.match("", "a").try(&.syntax_tree).should be_nil
       end
@@ -652,6 +660,7 @@ describe Arborist do
         m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
         m.match("aaa", "a").try(&.syntax_tree).should eq ["a", ["a", "a"]]
         m.match("aaaa", "a").try(&.syntax_tree).should eq ["a", ["a", ["a", "a"]]]
+        m.match("aaaa", "a").try(&.simple_s_exp).should eq "(a a (a a (a a (a a))))"
         m.match("b", "a").try(&.syntax_tree).should be_nil
         m.match("", "a").try(&.syntax_tree).should be_nil
       end
@@ -694,8 +703,10 @@ describe Arborist do
         m.match("aa", "a").try(&.syntax_tree).should eq ["a", "a"]
         # Arborist::GlobalDebug.enable!
         m.match("aaa", "a").try(&.syntax_tree).should eq ["a", ["a", "a"]]
+        m.match("aaa", "a").try(&.simple_s_exp).should eq "(a a (a a (a a)))"
         # Arborist::GlobalDebug.disable!
         m.match("aaaa", "a").try(&.syntax_tree).should eq ["a", ["a", ["a", "a"]]]
+        m.match("aaaa", "a").try(&.simple_s_exp).should eq "(a a (a a (a a (a a))))"
         m.match("b", "a").try(&.syntax_tree).should be_nil
         m.match("", "a").try(&.syntax_tree).should be_nil
       end
