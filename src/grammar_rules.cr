@@ -17,8 +17,8 @@ module Arborist
       #   = ident "{" Rule* "}"
       #   / Rule*
       Grammar = choice(
-        seq(star(apply("space")), apply("ident"), term("{"), star(apply("Rule")), term("}")).label("named"),
-        seq(star(apply("space")), star(apply("Rule"))).label("unnamed")
+        seq(star(apply("space")), apply("ident"), term("{"), star(apply("Rule")), term("}"), star(apply("skip"))).label("named"),
+        seq(star(apply("space")), star(apply("Rule")), star(apply("skip"))).label("unnamed")
       )
 
       Rule = seq(apply("ident"), term("<-"), apply("RuleBody")).label("define")

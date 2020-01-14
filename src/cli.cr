@@ -11,12 +11,14 @@ def run(grammar_file_path, input_file_path, print_mode)
   parse_tree = grammar.parse_file(input_file_path)
   if parse_tree
     case print_mode
+    when :simple
+      puts parse_tree.simple_s_exp
     when :sexp
       puts parse_tree.s_exp
     when :binary
       STDOUT.write(Arborist::ParseTree.to_msgpack(parse_tree))
     when :recognize_only
-      puts "Parsed successfully."
+      puts "Input conforms to grammar."
     end
   else
     grammar.print_match_failure_error
@@ -45,6 +47,7 @@ def main
     parser.on("-d", "Enable debug mode.") { Config.debug = true }
     parser.on("-g grammar_file.g", "Specifies the grammar file") { |file_name| Config.grammar_file = file_name }
     parser.on("-h", "--help", "Show this help") { puts parser; exit }
+    parser.on("--simple", "Print the parse tree as simple one-line s-expression. (default is binary mode)") { print_mode = :simple }
     parser.on("-s", "Print the parse tree as an s-expression. (default is binary mode)") { print_mode = :sexp }
     parser.on("-r", "Recognize only; do not print the parse tree. (default is binary mode)") { print_mode = :recognize_only }
     parser.invalid_option do |flag|

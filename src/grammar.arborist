@@ -6,8 +6,8 @@
 
 Arborist {
   Grammar
-    <- space* ident "{" Rule* "}"    -- named
-    / space* Rule*                   -- unnamed
+    <- space* ident "{" Rule* "}" skip*    -- named
+    / space* Rule* skip*                   -- unnamed
   
   Rule
     <- ident "<-" RuleBody

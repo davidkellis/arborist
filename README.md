@@ -84,15 +84,14 @@ $ ./stackcollapse.pl ../arborist/out.stacks | ./flamegraph.pl > ~/Downloads/arbo
 ### Command Line Interface
 
 ```bash
-$ cat mygrammar.g
-E <- E - E / E + E / Num
-Num <- ("0".."9")+
-
-$ cat input_document.txt
+~/projects/arborist ❯ ./build.sh
+~/projects/arborist ❯ cat mygrammar.g
+Start <- E !.
+E <- E "-" E / E "+" E / ("0".."9")+
+~/projects/arborist ❯ cat input_document.txt
 1-2+3-4+5
-
-$ arborist -g mygrammar.g input_document.txt
-[[[[["1"], "-", ["2"]], "+", ["3"]], "-", ["4"]], "+", ["5"]]
+~/projects/arborist ❯ ./arborist --simple -g mygrammar.g input_document.txt
+(Start (E (E (E (E (E 1) - (E 2)) + (E 3)) - (E 4)) + (E 5)))
 ```
 
 The parse tree written to stdout may be redirected to a file, piped to another tool, etc.
