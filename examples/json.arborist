@@ -1,0 +1,25 @@
+JSON {
+  Object  <- "{" (Pair ("," Pair)*)? "}"
+  Pair    <- string ":" value
+  Array   <- "[" (value ("," value)* )? "]"
+  value   <- string
+          / number
+          / Object
+          / Array
+          / true
+          / false
+          / null
+  true    <- "true"
+  false   <- "false"
+  null    <- "null"
+  string  <- "\"" char* "\""
+  char    <- "\\\""
+          / "\\\\"
+          / "\\" ("b" / "f" / "n" / "r" / "t")
+          / "\\u" hex hex hex hex
+          / (!"\"" .)
+  number  <- "0"
+          / "1".."9" digit* ("." digit*)?
+  digit   <- "0".."9"
+  hex     <- digit | "a".."f" | "A".."F"
+}

@@ -108,7 +108,8 @@ dependencies:
 
 Then use it like this:
 
-```crystal
+```bash
+~/projects/arborist ❯ cat test.cr
 require "arborist"
 
 include Arborist::DSL
@@ -120,12 +121,12 @@ include Arborist::DSL
 #   / num         -- num
 # num <- [0-9]+
 e = choice(
-  seq(apply("e").label("e1"), term("-"), apply("e").label("e2")).label("subtract"), 
-  seq(apply("e").label("exprs"), star(seq(term("+"), apply("e").label("exprs")))).label("add"), 
+  seq(apply("e").label("e1"), term("-"), apply("e").label("e2")).label("subtract"),
+  seq(apply("e").label("exprs"), star(seq(term("+"), apply("e").label("exprs")))).label("add"),
   apply("num").label("num")
 )
 num = plus(range('0'..'9'))
-m1 = Matcher.new.add_rule("e", e).add_rule("num", num)
+m1 = Arborist::Matcher.new.add_rule("e", e).add_rule("num", num)
 
 # parse an expression into a parse tree
 
@@ -133,11 +134,11 @@ parse_tree = m1.match("1-2+10-3+10", "e")
 
 puts "expression: 1-2+10-3+10"
 puts "parse tree:"
-puts parse_tree.try(&.syntax_tree)
+puts parse_tree.try(&.simple_s_exp)
 
 # create a visitor to traverse the parse tree
 
-eval = Visitor(Int32).new
+eval = Arborist::Visitor(Int32).new
 
 eval.on("e_subtract") do |ctx|
   # ctx.get("e1").visit - ctx.e2.visit
@@ -160,14 +161,11 @@ end
 raise "invalid parse tree" unless parse_tree
 puts "evaluated value:"
 puts eval.visit(parse_tree)
-```
 
-prints
-
-```
+~/projects/arborist ❯ crystal run test.cr
 expression: 1-2+10-3+10
 parse tree:
-[[[[["1"], "-", ["2"]], [["+", ["1", "0"]]]], "-", ["3"]], [["+", ["1", "0"]]]]
+(e (e (e (e (e (num 1)) - (e (num 2))) + (e (num 1 0))) - (e (num 3))) + (e (num 1 0)))
 evaluated value:
 16
 ```

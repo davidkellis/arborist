@@ -3,12 +3,18 @@ require "option_parser"
 require "./grammar"
 require "./parse_tree"
 
-def run(grammar_file_path, input_file_path, print_mode)
+def run(grammar_file_path, input_file_path, print_mode, print_timings)
   # puts "loading grammar:"
+  t1 = Time.local
   grammar = Arborist::Grammar.new(grammar_file_path)
+  t2 = Time.local
   # puts "parsing input file:"
   Arborist::GlobalDebug.enable! if Config.debug
   parse_tree = grammar.parse_file(input_file_path)
+  t3 = Time.local
+  if print_timings
+    puts "timings: load grammar = #{t2 - t1} ; parse = #{t3 - t2}"
+  end
   if parse_tree
     case print_mode
     when :simple
@@ -41,6 +47,7 @@ def main
   grammar_file = nil
   args = [] of String
   print_mode = :binary
+  print_timings = false
 
   OptionParser.parse do |parser|
     parser.banner = "Usage: arborist -g grammar_file.g file_to_parse.ext"
@@ -50,6 +57,7 @@ def main
     parser.on("--simple", "Print the parse tree as simple one-line s-expression. (default is binary mode)") { print_mode = :simple }
     parser.on("-s", "Print the parse tree as an s-expression. (default is binary mode)") { print_mode = :sexp }
     parser.on("-r", "Recognize only; do not print the parse tree. (default is binary mode)") { print_mode = :recognize_only }
+    parser.on("-t", "Print time to load grammar and parse. (default to false)") { print_timings = true }
     parser.invalid_option do |flag|
       STDERR.puts "ERROR: #{flag} is not a valid option."
       STDERR.puts parser
@@ -67,7 +75,7 @@ def main
   (STDERR.puts("Input file must be specified") ; exit(1)) unless input_file
   (STDERR.puts("Input file \"#{input_file}\" does not exist") ; exit(1)) unless File.exists?(input_file.as(String))
 
-  run(Config.grammar_file.as(String), input_file.as(String), print_mode)
+  run(Config.grammar_file.as(String), input_file.as(String), print_mode, print_timings)
 end
 
 main
