@@ -1,0 +1,519 @@
+# This grammar is based on https://github.com/harc/ohm/blob/master/examples/ecmascript/es5.ohm and http://boshi.inimino.org/3box/asof/1269629763069/PEG/ECMAScript_unified.peg
+
+ES5 {
+
+  Program <- &(directive*) SourceElement*
+
+  # §A.1 Lexical Grammar -- https://es5.github.io/#A.1
+
+  #  Note: the following lexical conventions (see https://es5.github.io/#x7)
+  #  are not implemented in this parser.
+  #
+  #  # Goal production in contexts where a leading "/" or "/=" is permitted:
+  #  InputElementDiv <- whitespace / lineTerminator / comment / token / DivPunctuator
+  #
+  #  # Goal production in contexts where a leading "/" or "/=' is not permitted:
+  #  InputElementRegExp <- whitespace / lineTerminator / comment / token / regularExpressionLiteral
+
+  sourceCharacter <- .
+
+  # Override Ohm's built-in definition of space.
+  space <- whitespace / lineTerminator / comment
+  skip <- space
+
+  whitespace <- "\t"
+             / "\x0B"    -- verticalTab
+             / "\x0C"    -- formFeed
+             / " "
+             / "\u00A0"  -- noBreakSpace
+             / "\uFEFF"  -- byteOrderMark
+             / unicodeSpaceSeparator
+
+  lineTerminator <- "\n" / "\r" / "\u2028" / "\u2029"
+  lineTerminatorSequence <- "\n" / "\r" !"\n" / "\u2028" / "\u2029" / "\r\n"
+
+  comment <- multiLineComment / singleLineComment
+
+  multiLineComment <- "/*" (!"*/" sourceCharacter)* "*/"
+  singleLineComment <- "//" (!lineTerminator sourceCharacter)*
+
+  identifier <- !reservedWord identifierName
+  identifierName <- identifierStart identifierPart*
+
+  identifierStart <- letter / "$" / "_"
+                  / "\\" unicodeEscapeSequence -- escaped
+  identifierPart <- identifierStart / unicodeCombiningMark
+                 / unicodeDigit / unicodeConnectorPunctuation
+                 / "\u200C" / "\u200D"
+  
+  letter <- unicode_letter
+
+  unicodeDigit
+    <- "\u0030".."\u0039" | "\u0660".."\u0669" | "\u06F0".."\u06F9" | "\u0966".."\u096F" | "\u09E6".."\u09EF" | "\u0A66".."\u0A6F" | "\u0AE6".."\u0AEF" | "\u0B66".."\u0B6F" | "\u0BE7".."\u0BEF" | "\u0C66".."\u0C6F" | "\u0CE6".."\u0CEF" | "\u0D66".."\u0D6F" | "\u0E50".."\u0E59" | "\u0ED0".."\u0ED9" | "\u0F20".."\u0F29" | "\uFF10".."\uFF19"
+
+  unicodeCombiningMark
+    <- "\u0300".."\u0345" | "\u0360".."\u0361" | "\u0483".."\u0486" | "\u0591".."\u05A1" | "\u05A3".."\u05B9" | "\u05BB".."\u05BD" | "\u05BF".."\u05BF" | "\u05C1".."\u05C2" | "\u05C4".."\u05C4" | "\u064B".."\u0652" | "\u0670".."\u0670" | "\u06D6".."\u06DC" | "\u06DF".."\u06E4" | "\u06E7".."\u06E8" | "\u06EA".."\u06ED" | "\u0901".."\u0902" | "\u093C".."\u093C" | "\u0941".."\u0948" | "\u094D".."\u094D" | "\u0951".."\u0954" | "\u0962".."\u0963" | "\u0981".."\u0981" | "\u09BC".."\u09BC" | "\u09C1".."\u09C4" | "\u09CD".."\u09CD" | "\u09E2".."\u09E3" | "\u0A02".."\u0A02" | "\u0A3C".."\u0A3C" | "\u0A41".."\u0A42" | "\u0A47".."\u0A48" | "\u0A4B".."\u0A4D" | "\u0A70".."\u0A71" | "\u0A81".."\u0A82" | "\u0ABC".."\u0ABC" | "\u0AC1".."\u0AC5" | "\u0AC7".."\u0AC8" | "\u0ACD".."\u0ACD" | "\u0B01".."\u0B01" | "\u0B3C".."\u0B3C" | "\u0B3F".."\u0B3F" | "\u0B41".."\u0B43" | "\u0B4D".."\u0B4D" | "\u0B56".."\u0B56" | "\u0B82".."\u0B82" | "\u0BC0".."\u0BC0" | "\u0BCD".."\u0BCD" | "\u0C3E".."\u0C40" | "\u0C46".."\u0C48" | "\u0C4A".."\u0C4D" | "\u0C55".."\u0C56" | "\u0CBF".."\u0CBF" | "\u0CC6".."\u0CC6" | "\u0CCC".."\u0CCD" | "\u0D41".."\u0D43" | "\u0D4D".."\u0D4D" | "\u0E31".."\u0E31" | "\u0E34".."\u0E3A" | "\u0E47".."\u0E4E" | "\u0EB1".."\u0EB1" | "\u0EB4".."\u0EB9" | "\u0EBB".."\u0EBC" | "\u0EC8".."\u0ECD" | "\u0F18".."\u0F19" | "\u0F35".."\u0F35" | "\u0F37".."\u0F37" | "\u0F39".."\u0F39" | "\u0F71".."\u0F7E" | "\u0F80".."\u0F84" | "\u0F86".."\u0F87" | "\u0F90".."\u0F95" | "\u0F97".."\u0F97" | "\u0F99".."\u0FAD" | "\u0FB1".."\u0FB7" | "\u0FB9".."\u0FB9" | "\u20D0".."\u20DC" | "\u20E1".."\u20E1" | "\u302A".."\u302F" | "\u3099".."\u309A" | "\uFB1E".."\uFB1E" | "\uFE20".."\uFE23"
+
+  unicodeConnectorPunctuation <- "\u005F" | "\u203F".."\u2040" | "\u30FB" | "\uFE33".."\uFE34" | "\uFE4D".."\uFE4F" | "\uFF3F" | "\uFF65"
+  unicodeSpaceSeparator <- "\u2000".."\u200B" | "\u3000"
+
+  reservedWord <- keyword / futureReservedWord / nullLiteral / booleanLiteral
+
+  # Note: keywords that are the complete prefix of another keyword should
+  # be prioritized (e.g. 'in' should come before 'instanceof')
+  keyword <- break    / do        / instanceof / typeof
+          / case     / else      / new        / var
+          / catch    / finally   / return     / void
+          / continue / for       / switch     / while
+          / debugger / function  / this       / with
+          / default  / if        / throw
+          / delete   / in        / try
+
+  futureReservedWordLax <- class  / enum  / extends
+                        / super  / const / export
+                        / import
+
+  futureReservedWordStrict <- futureReservedWordLax
+                           / implements / let     / private   / public
+                           / interface  / package / protected / static
+                           / yield
+
+  futureReservedWord <- futureReservedWordStrict
+
+  #  Note: Punctuator and DivPunctuator (see https://es5.github.io/x7.html#x7.7) are
+  #  not currently used by this grammar.
+
+  literal <- nullLiteral / booleanLiteral / numericLiteral
+          / stringLiteral / regularExpressionLiteral      # spec forgot Regexp literals in appendix?
+  nullLiteral <- "null" !identifierPart
+  booleanLiteral <- ("true" / "false") !identifierPart
+
+  # For semantics on how decimal literals are constructed, see section 7.8.3
+
+  # Note that the ordering of hexIntegerLiteral and decimalLiteral is reversed w.r.t. the spec
+  # This is intentional: the order decimalLiteral / hexIntegerLiteral will parse
+  # "0x..." as a decimal literal "0" followed by "x..."
+  numericLiteral <- octalIntegerLiteral / hexIntegerLiteral / decimalLiteral
+
+  decimalLiteral <- decimalIntegerLiteral "." decimalDigit* exponentPart -- bothParts
+                 /                       "." decimalDigit+ exponentPart -- decimalsOnly
+                 / decimalIntegerLiteral                   exponentPart -- integerOnly
+
+  decimalIntegerLiteral <- nonZeroDigit decimalDigit*  -- nonZero
+                        / "0"                         -- zero
+  decimalDigit <- "0".."9"
+  nonZeroDigit <- "1".."9"
+
+  exponentPart <- exponentIndicator signedInteger -- present
+               /                                 -- absent
+  exponentIndicator <- "e" / "E"
+  signedInteger <- "+" decimalDigit* -- positive
+                / "-" decimalDigit* -- negative
+                /     decimalDigit+ -- noSign
+
+  hexIntegerLiteral <- "0x" hexDigit+
+                    / "0X" hexDigit+
+
+  # hexDigit defined in Ohm's built-in rules (otherwise: hexDigit <- "0".."9" / "a".."f" / "A".."F")
+
+  octalIntegerLiteral <- "0" octalDigit+
+
+  octalDigit <- "0".."7"
+
+  # For semantics on how string literals are constructed, see section 7.8.4
+  stringLiteral <- "\"" doubleStringCharacter* "\""
+                / "'" singleStringCharacter* "'"
+  doubleStringCharacter <- !("\"" / "\\" / lineTerminator) sourceCharacter -- nonEscaped
+                        / "\\" escapeSequence                             -- escaped
+                        / lineContinuation                                -- lineContinuation
+  singleStringCharacter <- !("'" / "\\" / lineTerminator) sourceCharacter -- nonEscaped
+                        / "\\" escapeSequence                            -- escaped
+                        / lineContinuation                               -- lineContinuation
+  lineContinuation <- "\\" lineTerminatorSequence
+  escapeSequence <- unicodeEscapeSequence
+                 / hexEscapeSequence
+                 / octalEscapeSequence
+                 / characterEscapeSequence  # Must come last.
+  characterEscapeSequence <- singleEscapeCharacter
+                          / nonEscapeCharacter
+  singleEscapeCharacter <- "'" / "\"" / "\\" / "b" / "f" / "n" / "r" / "t" / "v"
+  nonEscapeCharacter <- !(escapeCharacter / lineTerminator) sourceCharacter
+  escapeCharacter <- singleEscapeCharacter / decimalDigit / "x" / "u"
+  octalEscapeSequence <- zeroToThree octalDigit octalDigit    -- whole
+                      / fourToSeven octalDigit               -- eightTimesfourToSeven
+                      / zeroToThree octalDigit !decimalDigit -- eightTimesZeroToThree
+                      / octalDigit !decimalDigit             -- octal
+  hexEscapeSequence <- "x" hexDigit hexDigit
+  unicodeEscapeSequence <- "u" hexDigit hexDigit hexDigit hexDigit
+
+  zeroToThree <- "0".."3"
+  fourToSeven <- "4".."7"
+
+  # §7.8.5 Regular Expression Literals -- https://es5.github.io/#x7.8.5
+
+  regularExpressionLiteral <- "/" regularExpressionBody "/" regularExpressionFlags
+  regularExpressionBody <- regularExpressionFirstChar regularExpressionChar*
+  regularExpressionFirstChar <- !("*" / "\\" / "/" / "[") regularExpressionNonTerminator
+                             / regularExpressionBackslashSequence
+                             / regularExpressionClass
+  regularExpressionChar <- !("\\" / "/" / "[") regularExpressionNonTerminator
+                        / regularExpressionBackslashSequence
+                        / regularExpressionClass
+  regularExpressionBackslashSequence <- "\\" regularExpressionNonTerminator
+  regularExpressionNonTerminator <- !(lineTerminator) sourceCharacter
+  regularExpressionClass <- "[" regularExpressionClassChar* "]"
+  regularExpressionClassChar <- !("]" / "\\") regularExpressionNonTerminator
+                             / regularExpressionBackslashSequence
+  regularExpressionFlags <- identifierPart*
+
+  # === Implementation-level rules (not part of the spec) ===
+
+  multiLineCommentNoNL <- "/*" (!("*/" / lineTerminator) sourceCharacter)* "*/"
+
+  # does not accept lineTerminators, not even implicit ones in a multiLineComment (cf. section 7.4)
+  spacesNoNL <- (whitespace / singleLineComment / multiLineCommentNoNL)*
+
+  # A semicolon is "automatically inserted" if a newline or the end of the input stream is
+  # reached, or the offending token is "}".
+  # See https://es5.github.io/#x7.9 for more information.
+  # NOTE: Applications of this rule *must* appear in a lexical context -- either in the body of a
+  # lexical rule, or inside `#()`.
+  sc <- space* (";" / !.)
+     / spacesNoNL (lineTerminator / !multiLineCommentNoNL multiLineComment / &"}")
+
+  # Convenience rules for parsing keyword tokens.
+  break <- "break" !identifierPart
+  do <- "do" !identifierPart
+  instanceof <- "instanceof" !identifierPart
+  typeof <- "typeof" !identifierPart
+  case <- "case" !identifierPart
+  else <- "else" !identifierPart
+  new <- "new" !identifierPart
+  var <- "var" !identifierPart
+  catch <- "catch" !identifierPart
+  finally <- "finally" !identifierPart
+  return <- "return" !identifierPart
+  void <- "void" !identifierPart
+  continue <- "continue" !identifierPart
+  for <- "for" !identifierPart
+  switch <- "switch" !identifierPart
+  while <- "while" !identifierPart
+  debugger <- "debugger" !identifierPart
+  function <- "function" !identifierPart
+  this <- "this" !identifierPart
+  with <- "with" !identifierPart
+  default <- "default" !identifierPart
+  if <- "if" !identifierPart
+  throw <- "throw" !identifierPart
+  delete <- "delete" !identifierPart
+  in <- "in" !identifierPart
+  try <- "try" !identifierPart
+  get <- "get" !identifierPart
+  set <- "set" !identifierPart
+  class <- "class" !identifierPart
+  enum <- "enum" !identifierPart
+  extends <- "extends" !identifierPart
+  super <- "super" !identifierPart
+  const <- "const" !identifierPart
+  export <- "export" !identifierPart
+  import <- "import" !identifierPart
+  implements <- "implements" !identifierPart
+  let <- "let" !identifierPart
+  private <- "private" !identifierPart
+  public <- "public" !identifierPart
+  interface <- "interface" !identifierPart
+  package <- "package" !identifierPart
+  protected <- "protected" !identifierPart
+  static <- "static" !identifierPart
+  yield <- "yield" !identifierPart
+  
+  # end of lexical rules
+
+  # §A.3 Expressions -- https://es5.github.io/#A.3
+
+  PrimaryExpression <- this
+                    / identifier
+                    / literal
+                      # ( litToken.type === "regexp"
+                      #   ? this.ast(_fromIdx, "RegExpExpr",{body:  litToken.value.body
+                      #                            flags: litToken.value.flags}, [])
+                      #   : this.ast(_fromIdx, "LiteralExpr",{type:  litToken.type
+                      #                             value: litToken.value}, []) )
+                    / ArrayLiteral
+                    / ObjectLiteral
+                    / "(" Expression ")"  -- parenExpr
+
+  ArrayLiteral <- "[" ListOfAssignmentExpressionOrElision "]"
+  ListOfAssignmentExpressionOrElision <- (AssignmentExpressionOrElision ("," AssignmentExpressionOrElision)*)?
+  AssignmentExpressionOrElision <- AssignmentExpression?
+
+  ObjectLiteral <- "{" ListOfPropertyAssignment "}"              -- noTrailingComma
+                / "{" NonemptyListOfPropertyAssignment "," "}"   -- trailingComma
+
+  ListOfPropertyAssignment <- (PropertyAssignment ("," PropertyAssignment)*)?
+  NonemptyListOfPropertyAssignment <- PropertyAssignment ("," PropertyAssignment)*
+  PropertyAssignment <- get PropertyName "(" ")" "{" FunctionBody "}"                  -- getter
+                     / set PropertyName "(" FormalParameter ")" "{" FunctionBody "}"  -- setter
+                     / PropertyName ":" AssignmentExpression                  -- simple
+
+  PropertyName <- identifierName
+               / stringLiteral
+               / numericLiteral
+
+  MemberExpression <- MemberExpression "[" Expression "]"  -- arrayRefExp
+                   / MemberExpression "." identifierName  -- propRefExp
+                   / new MemberExpression Arguments       -- newExp
+                   / FunctionExpression
+                   / PrimaryExpression
+
+  NewExpression <- MemberExpression
+                / new NewExpression -- newExp
+
+  CallExpression <- CallExpression "[" Expression "]"  -- arrayRefExp
+                 / CallExpression "." identifierName  -- propRefExp
+                 / CallExpression Arguments           -- callExpExp
+                 / MemberExpression Arguments         -- memberExpExp
+
+  Arguments <- "(" ListOfAssignmentExpression ")"
+
+  LeftHandSideExpression <- CallExpression
+                         / NewExpression
+
+  postfixExpression <- LeftHandSideExpression spacesNoNL "++"  -- postIncrement
+                    / LeftHandSideExpression spacesNoNL "--"   -- postDecrement
+                    / LeftHandSideExpression
+
+  UnaryExpression <- delete UnaryExpression  -- deleteExp
+                  / void   UnaryExpression  -- voidExp
+                  / typeof UnaryExpression  -- typeofExp
+                  / "++"   UnaryExpression  -- preIncrement
+                  / "--"   UnaryExpression  -- preDecrement
+                  / "+"    UnaryExpression  -- unaryPlus
+                  / "-"    UnaryExpression  -- unaryMinus
+                  / "~"    UnaryExpression  -- bnot
+                  / "!"    UnaryExpression  -- lnot
+                  / postfixExpression
+
+  MultiplicativeExpression <- MultiplicativeExpression "*" UnaryExpression -- mul
+                           / MultiplicativeExpression "/" UnaryExpression -- div
+                           / MultiplicativeExpression "%" UnaryExpression -- mod
+                           / UnaryExpression
+
+  AdditiveExpression <- AdditiveExpression "+" MultiplicativeExpression -- add
+                     / AdditiveExpression "-" MultiplicativeExpression -- sub
+                     / MultiplicativeExpression
+
+  ShiftExpression <- ShiftExpression "<<" AdditiveExpression  -- lsl
+                  / ShiftExpression ">>>" AdditiveExpression -- lsr
+                  / ShiftExpression ">>" AdditiveExpression  -- asr
+                  / AdditiveExpression
+
+  RelationalExpression
+    <- RelationalExpression "<" ShiftExpression          -- lt
+    / RelationalExpression ">" ShiftExpression           -- gt
+    / RelationalExpression "<=" ShiftExpression          -- le
+    / RelationalExpression ">=" ShiftExpression          -- ge
+    / RelationalExpression "instanceof" ShiftExpression  -- instanceOfExp
+    / RelationalExpression "in" ShiftExpression          -- inExp
+    / ShiftExpression
+  RelationalExpressionNoIn
+    <- RelationalExpressionNoIn "<" ShiftExpression          -- lt
+    / RelationalExpressionNoIn ">" ShiftExpression           -- gt
+    / RelationalExpressionNoIn "<=" ShiftExpression          -- le
+    / RelationalExpressionNoIn ">=" ShiftExpression          -- ge
+    / RelationalExpressionNoIn "instanceof" ShiftExpression  -- instanceOfExp
+    / ShiftExpression
+
+  EqualityExpression
+    <- EqualityExpression "==" RelationalExpression  -- equal
+    / EqualityExpression "!=" RelationalExpression  -- notEqual
+    / EqualityExpression "===" RelationalExpression -- eq
+    / EqualityExpression "!==" RelationalExpression -- notEq
+    / RelationalExpression
+  EqualityExpressionNoIn
+    <- EqualityExpressionNoIn "==" RelationalExpressionNoIn  -- equal
+    / EqualityExpressionNoIn "!=" RelationalExpressionNoIn  -- notEqual
+    / EqualityExpressionNoIn "===" RelationalExpressionNoIn -- eq
+    / EqualityExpressionNoIn "!==" RelationalExpressionNoIn -- notEq
+    / RelationalExpressionNoIn
+
+  BitwiseANDExpression
+    <- BitwiseANDExpression "&" EqualityExpression -- band
+    / EqualityExpression
+  BitwiseANDExpressionNoIn
+    <- BitwiseANDExpressionNoIn "&" EqualityExpressionNoIn -- band
+    / EqualityExpressionNoIn
+
+  BitwiseXORExpression
+    <- BitwiseXORExpression "^" BitwiseANDExpression -- bxor
+    / BitwiseANDExpression
+  BitwiseXORExpressionNoIn
+    <- BitwiseXORExpressionNoIn "^" BitwiseANDExpressionNoIn -- bxor
+    / BitwiseANDExpressionNoIn
+
+  BitwiseORExpression
+    <- BitwiseORExpression "|" BitwiseXORExpression -- bor
+    / BitwiseXORExpression
+  BitwiseORExpressionNoIn
+    <- BitwiseORExpressionNoIn "|" BitwiseXORExpressionNoIn -- bor
+    / BitwiseXORExpressionNoIn
+
+  LogicalANDExpression
+    <- LogicalANDExpression "&&" BitwiseORExpression -- land
+    / BitwiseORExpression
+  LogicalANDExpressionNoIn
+    <- LogicalANDExpressionNoIn "&&" BitwiseORExpressionNoIn -- land
+    / BitwiseORExpressionNoIn
+
+  LogicalORExpression
+    <- LogicalORExpression "||" LogicalANDExpression -- lor
+    / LogicalANDExpression
+  LogicalORExpressionNoIn
+    <- LogicalORExpressionNoIn "||" LogicalANDExpressionNoIn -- lor
+    / LogicalANDExpressionNoIn
+
+  ConditionalExpression
+    <- LogicalORExpression "?" AssignmentExpression ":" AssignmentExpression -- conditional
+    / LogicalORExpression
+  ConditionalExpressionNoIn
+    <- LogicalORExpressionNoIn "?" AssignmentExpression ":" AssignmentExpressionNoIn -- conditional
+    / LogicalORExpressionNoIn
+
+  ListOfAssignmentExpression <- (AssignmentExpression ("," AssignmentExpression)*)?
+  AssignmentExpression
+    <- LeftHandSideExpression assignmentOperator AssignmentExpression -- assignment
+    / ConditionalExpression
+  AssignmentExpressionNoIn
+    <- LeftHandSideExpression assignmentOperator AssignmentExpressionNoIn -- assignment
+    / ConditionalExpressionNoIn
+
+  Expression
+    <- Expression "," AssignmentExpression -- commaExp
+    / AssignmentExpression
+  ExpressionNoIn
+    <- ExpressionNoIn "," AssignmentExpressionNoIn -- commaExp
+    / AssignmentExpressionNoIn
+
+  assignmentOperator <- "=" / ">>>=" / "<<=" / ">>="
+                     / "*=" / "/=" / "%=" / "+=" / "-=" / "&=" / "^=" / "|="
+
+  # §A.4 Statements -- https://es5.github.io/#A.4
+
+  Statement
+    <- Block
+    / variableStatement
+    / EmptyStatement
+    / expressionStatement
+    / IfStatement
+    / iterationStatement
+    / continueStatement
+    / breakStatement
+    / returnStatement
+    / WithStatement
+    / LabelledStatement
+    / SwitchStatement
+    / throwStatement
+    / TryStatement
+    / DebuggerStatement
+
+  Block <- "{" StatementList "}"
+
+  StatementList <- Statement*
+
+  variableStatement <- var S? VariableDeclarationList sc
+
+  VariableDeclarationList <- NonemptyListOfVariableDeclaration
+  VariableDeclarationListNoIn <- NonemptyListOfVariableDeclarationNoIn
+
+  NonemptyListOfVariableDeclaration <- VariableDeclaration ("," VariableDeclaration)*
+  NonemptyListOfVariableDeclarationNoIn <- VariableDeclarationNoIn ("," VariableDeclarationNoIn)*
+  VariableDeclaration <- identifier Initialiser?
+  VariableDeclarationNoIn <- identifier InitialiserNoIn?
+
+  Initialiser <- "=" AssignmentExpression
+  InitialiserNoIn <- "=" AssignmentExpressionNoIn
+
+  EmptyStatement <- ";" # note: this semicolon eats newlines
+
+  expressionStatement <- !("{" / function) S? Expression sc
+
+  IfStatement <- if "(" Expression ")" Statement (else Statement)?
+
+  iterationStatement <- do S? Statement S? while S? "(" S? Expression S? ")" sc    -- doWhile
+                     / while S? "(" S? Expression S? ")" S? Statement           -- whileDo
+                     / for S? "(" S? ExpressionNoIn? S? ";"
+                                 S? Expression? S? ";"
+                                 S? Expression? S? ")" S? Statement          -- for3
+                     / for S? "(" S? var S? VariableDeclarationListNoIn S? ";"
+                                 S? Expression? S? ";"
+                                 S? Expression? S? ")" S? Statement          -- for3var
+                     / for S? "(" S? LeftHandSideExpression S? in
+                                 S? Expression S? ")" S? Statement           -- forIn
+                     / for S? "(" S? var S? VariableDeclarationNoIn S? in
+                                 S? Expression S? ")" S? Statement           -- forInVar
+
+  continueStatement <- continue (spacesNoNL identifier)? sc
+
+  breakStatement <- break (spacesNoNL identifier)? sc
+
+  returnStatement <- return ((spacesNoNL !space) Expression)? sc
+
+  WithStatement <- with "(" Expression ")" Statement
+
+  SwitchStatement <- switch "(" Expression ")" CaseBlock
+
+  CaseBlock <- "{" CaseClause* DefaultClause CaseClause* "}"  -- withDefault
+            / "{"                           CaseClause* "}"  -- withoutDefault
+
+  CaseClause <- case Expression ":" Statement*
+
+  DefaultClause <- default ":" Statement*
+
+  LabelledStatement <- identifier ":" Statement
+
+  throwStatement <- throw S? Expression sc  -- throwExpr
+
+  TryStatement <- try Block Catch Finally  -- tryCatchFinally
+               / try Block Finally        -- tryFinally
+               / try Block Catch          -- tryCatch
+
+  Catch <- catch "(" FormalParameter ")" Block
+
+  Finally <- finally Block
+
+  DebuggerStatement <- #(debugger sc)
+
+  # §A.5 Functions and Programs -- https://es5.github.io/#A.5
+
+  FunctionDeclaration
+    <- function identifier "(" FormalParameterList ")" "{" FunctionBody "}"
+
+  FunctionExpression
+    <- function identifier "(" FormalParameterList ")" "{" FunctionBody "}"  -- named
+    / function "(" FormalParameterList ")" "{" FunctionBody "}"             -- anonymous
+
+  FormalParameterList <- ListOfFormalParameter
+
+  ListOfFormalParameter <- (FormalParameter ("," FormalParameter)*)?
+  FormalParameter <- identifier
+
+  #  Note: The directive Prologue is the longest sequence of expressionStatement
+  #  productions occurring as the initial SourceElement (see https://es5.github.io/#x14.1)
+  FunctionBody <- &(directive*) SourceElement*
+
+  SourceElement <- Declaration / Statement
+
+  # Broken out so es6 can override to include ConstDecl and LetDecl
+  Declaration <- FunctionDeclaration
+
+  directive <- stringLiteral sc
+
+  S <- ( whitespace / lineTerminatorSequence / comment )+
+
+  unicode_upper <- "\u{41}".."\u{5A}" | "\u{C0}".."\u{D6}" | "\u{D8}".."\u{DE}" | "\u{100}" | "\u{102}" | "\u{104}" | "\u{106}" | "\u{108}" | "\u{10A}" | "\u{10C}" | "\u{10E}" | "\u{110}" | "\u{112}" | "\u{114}" | "\u{116}" | "\u{118}" | "\u{11A}" | "\u{11C}" | "\u{11E}" | "\u{120}" | "\u{122}" | "\u{124}" | "\u{126}" | "\u{128}" | "\u{12A}" | "\u{12C}" | "\u{12E}" | "\u{130}" | "\u{132}" | "\u{134}" | "\u{136}" | "\u{139}" | "\u{13B}" | "\u{13D}" | "\u{13F}" | "\u{141}" | "\u{143}" | "\u{145}" | "\u{147}" | "\u{14A}" | "\u{14C}" | "\u{14E}" | "\u{150}" | "\u{152}" | "\u{154}" | "\u{156}" | "\u{158}" | "\u{15A}" | "\u{15C}" | "\u{15E}" | "\u{160}" | "\u{162}" | "\u{164}" | "\u{166}" | "\u{168}" | "\u{16A}" | "\u{16C}" | "\u{16E}" | "\u{170}" | "\u{172}" | "\u{174}" | "\u{176}" | "\u{178}".."\u{179}" | "\u{17B}" | "\u{17D}" | "\u{181}".."\u{182}" | "\u{184}" | "\u{186}".."\u{187}" | "\u{189}".."\u{18B}" | "\u{18E}".."\u{191}" | "\u{193}".."\u{194}" | "\u{196}".."\u{198}" | "\u{19C}".."\u{19D}" | "\u{19F}".."\u{1A0}" | "\u{1A2}" | "\u{1A4}" | "\u{1A6}".."\u{1A7}" | "\u{1A9}" | "\u{1AC}" | "\u{1AE}".."\u{1AF}" | "\u{1B1}".."\u{1B3}" | "\u{1B5}" | "\u{1B7}".."\u{1B8}" | "\u{1BC}" | "\u{1C4}" | "\u{1C7}" | "\u{1CA}" | "\u{1CD}" | "\u{1CF}" | "\u{1D1}" | "\u{1D3}" | "\u{1D5}" | "\u{1D7}" | "\u{1D9}" | "\u{1DB}" | "\u{1DE}" | "\u{1E0}" | "\u{1E2}" | "\u{1E4}" | "\u{1E6}" | "\u{1E8}" | "\u{1EA}" | "\u{1EC}" | "\u{1EE}" | "\u{1F1}" | "\u{1F4}" | "\u{1F6}".."\u{1F8}" | "\u{1FA}" | "\u{1FC}" | "\u{1FE}" | "\u{200}" | "\u{202}" | "\u{204}" | "\u{206}" | "\u{208}" | "\u{20A}" | "\u{20C}" | "\u{20E}" | "\u{210}" | "\u{212}" | "\u{214}" | "\u{216}" | "\u{218}" | "\u{21A}" | "\u{21C}" | "\u{21E}" | "\u{220}" | "\u{222}" | "\u{224}" | "\u{226}" | "\u{228}" | "\u{22A}" | "\u{22C}" | "\u{22E}" | "\u{230}" | "\u{232}" | "\u{23A}".."\u{23B}" | "\u{23D}".."\u{23E}" | "\u{241}" | "\u{243}".."\u{246}" | "\u{248}" | "\u{24A}" | "\u{24C}" | "\u{24E}" | "\u{370}" | "\u{372}" | "\u{376}" | "\u{37F}" | "\u{386}" | "\u{388}".."\u{38A}" | "\u{38C}" | "\u{38E}".."\u{38F}" | "\u{391}".."\u{3A1}" | "\u{3A3}".."\u{3AB}" | "\u{3CF}" | "\u{3D2}".."\u{3D4}" | "\u{3D8}" | "\u{3DA}" | "\u{3DC}" | "\u{3DE}" | "\u{3E0}" | "\u{3E2}" | "\u{3E4}" | "\u{3E6}" | "\u{3E8}" | "\u{3EA}" | "\u{3EC}" | "\u{3EE}" | "\u{3F4}" | "\u{3F7}" | "\u{3F9}".."\u{3FA}" | "\u{3FD}".."\u{42F}" | "\u{460}" | "\u{462}" | "\u{464}" | "\u{466}" | "\u{468}" | "\u{46A}" | "\u{46C}" | "\u{46E}" | "\u{470}" | "\u{472}" | "\u{474}" | "\u{476}" | "\u{478}" | "\u{47A}" | "\u{47C}" | "\u{47E}" | "\u{480}" | "\u{48A}" | "\u{48C}" | "\u{48E}" | "\u{490}" | "\u{492}" | "\u{494}" | "\u{496}" | "\u{498}" | "\u{49A}" | "\u{49C}" | "\u{49E}" | "\u{4A0}" | "\u{4A2}" | "\u{4A4}" | "\u{4A6}" | "\u{4A8}" | "\u{4AA}" | "\u{4AC}" | "\u{4AE}" | "\u{4B0}" | "\u{4B2}" | "\u{4B4}" | "\u{4B6}" | "\u{4B8}" | "\u{4BA}" | "\u{4BC}" | "\u{4BE}" | "\u{4C0}".."\u{4C1}" | "\u{4C3}" | "\u{4C5}" | "\u{4C7}" | "\u{4C9}" | "\u{4CB}" | "\u{4CD}" | "\u{4D0}" | "\u{4D2}" | "\u{4D4}" | "\u{4D6}" | "\u{4D8}" | "\u{4DA}" | "\u{4DC}" | "\u{4DE}" | "\u{4E0}" | "\u{4E2}" | "\u{4E4}" | "\u{4E6}" | "\u{4E8}" | "\u{4EA}" | "\u{4EC}" | "\u{4EE}" | "\u{4F0}" | "\u{4F2}" | "\u{4F4}" | "\u{4F6}" | "\u{4F8}" | "\u{4FA}" | "\u{4FC}" | "\u{4FE}" | "\u{500}" | "\u{502}" | "\u{504}" | "\u{506}" | "\u{508}" | "\u{50A}" | "\u{50C}" | "\u{50E}" | "\u{510}" | "\u{512}" | "\u{514}" | "\u{516}" | "\u{518}" | "\u{51A}" | "\u{51C}" | "\u{51E}" | "\u{520}" | "\u{522}" | "\u{524}" | "\u{526}" | "\u{528}" | "\u{52A}" | "\u{52C}" | "\u{52E}" | "\u{531}".."\u{556}" | "\u{10A0}".."\u{10C5}" | "\u{10C7}" | "\u{10CD}" | "\u{13A0}".."\u{13F5}" | "\u{1C90}".."\u{1CBA}" | "\u{1CBD}".."\u{1CBF}" | "\u{1E00}" | "\u{1E02}" | "\u{1E04}" | "\u{1E06}" | "\u{1E08}" | "\u{1E0A}" | "\u{1E0C}" | "\u{1E0E}" | "\u{1E10}" | "\u{1E12}" | "\u{1E14}" | "\u{1E16}" | "\u{1E18}" | "\u{1E1A}" | "\u{1E1C}" | "\u{1E1E}" | "\u{1E20}" | "\u{1E22}" | "\u{1E24}" | "\u{1E26}" | "\u{1E28}" | "\u{1E2A}" | "\u{1E2C}" | "\u{1E2E}" | "\u{1E30}" | "\u{1E32}" | "\u{1E34}" | "\u{1E36}" | "\u{1E38}" | "\u{1E3A}" | "\u{1E3C}" | "\u{1E3E}" | "\u{1E40}" | "\u{1E42}" | "\u{1E44}" | "\u{1E46}" | "\u{1E48}" | "\u{1E4A}" | "\u{1E4C}" | "\u{1E4E}" | "\u{1E50}" | "\u{1E52}" | "\u{1E54}" | "\u{1E56}" | "\u{1E58}" | "\u{1E5A}" | "\u{1E5C}" | "\u{1E5E}" | "\u{1E60}" | "\u{1E62}" | "\u{1E64}" | "\u{1E66}" | "\u{1E68}" | "\u{1E6A}" | "\u{1E6C}" | "\u{1E6E}" | "\u{1E70}" | "\u{1E72}" | "\u{1E74}" | "\u{1E76}" | "\u{1E78}" | "\u{1E7A}" | "\u{1E7C}" | "\u{1E7E}" | "\u{1E80}" | "\u{1E82}" | "\u{1E84}" | "\u{1E86}" | "\u{1E88}" | "\u{1E8A}" | "\u{1E8C}" | "\u{1E8E}" | "\u{1E90}" | "\u{1E92}" | "\u{1E94}" | "\u{1E9E}" | "\u{1EA0}" | "\u{1EA2}" | "\u{1EA4}" | "\u{1EA6}" | "\u{1EA8}" | "\u{1EAA}" | "\u{1EAC}" | "\u{1EAE}" | "\u{1EB0}" | "\u{1EB2}" | "\u{1EB4}" | "\u{1EB6}" | "\u{1EB8}" | "\u{1EBA}" | "\u{1EBC}" | "\u{1EBE}" | "\u{1EC0}" | "\u{1EC2}" | "\u{1EC4}" | "\u{1EC6}" | "\u{1EC8}" | "\u{1ECA}" | "\u{1ECC}" | "\u{1ECE}" | "\u{1ED0}" | "\u{1ED2}" | "\u{1ED4}" | "\u{1ED6}" | "\u{1ED8}" | "\u{1EDA}" | "\u{1EDC}" | "\u{1EDE}" | "\u{1EE0}" | "\u{1EE2}" | "\u{1EE4}" | "\u{1EE6}" | "\u{1EE8}" | "\u{1EEA}" | "\u{1EEC}" | "\u{1EEE}" | "\u{1EF0}" | "\u{1EF2}" | "\u{1EF4}" | "\u{1EF6}" | "\u{1EF8}" | "\u{1EFA}" | "\u{1EFC}" | "\u{1EFE}" | "\u{1F08}".."\u{1F0F}" | "\u{1F18}".."\u{1F1D}" | "\u{1F28}".."\u{1F2F}" | "\u{1F38}".."\u{1F3F}" | "\u{1F48}".."\u{1F4D}" | "\u{1F59}" | "\u{1F5B}" | "\u{1F5D}" | "\u{1F5F}" | "\u{1F68}".."\u{1F6F}" | "\u{1FB8}".."\u{1FBB}" | "\u{1FC8}".."\u{1FCB}" | "\u{1FD8}".."\u{1FDB}" | "\u{1FE8}".."\u{1FEC}" | "\u{1FF8}".."\u{1FFB}" | "\u{2102}" | "\u{2107}" | "\u{210B}".."\u{210D}" | "\u{2110}".."\u{2112}" | "\u{2115}" | "\u{2119}".."\u{211D}" | "\u{2124}" | "\u{2126}" | "\u{2128}" | "\u{212A}".."\u{212D}" | "\u{2130}".."\u{2133}" | "\u{213E}".."\u{213F}" | "\u{2145}" | "\u{2183}" | "\u{2C00}".."\u{2C2E}" | "\u{2C60}" | "\u{2C62}".."\u{2C64}" | "\u{2C67}" | "\u{2C69}" | "\u{2C6B}" | "\u{2C6D}".."\u{2C70}" | "\u{2C72}" | "\u{2C75}" | "\u{2C7E}".."\u{2C80}" | "\u{2C82}" | "\u{2C84}" | "\u{2C86}" | "\u{2C88}" | "\u{2C8A}" | "\u{2C8C}" | "\u{2C8E}" | "\u{2C90}" | "\u{2C92}" | "\u{2C94}" | "\u{2C96}" | "\u{2C98}" | "\u{2C9A}" | "\u{2C9C}" | "\u{2C9E}" | "\u{2CA0}" | "\u{2CA2}" | "\u{2CA4}" | "\u{2CA6}" | "\u{2CA8}" | "\u{2CAA}" | "\u{2CAC}" | "\u{2CAE}" | "\u{2CB0}" | "\u{2CB2}" | "\u{2CB4}" | "\u{2CB6}" | "\u{2CB8}" | "\u{2CBA}" | "\u{2CBC}" | "\u{2CBE}" | "\u{2CC0}" | "\u{2CC2}" | "\u{2CC4}" | "\u{2CC6}" | "\u{2CC8}" | "\u{2CCA}" | "\u{2CCC}" | "\u{2CCE}" | "\u{2CD0}" | "\u{2CD2}" | "\u{2CD4}" | "\u{2CD6}" | "\u{2CD8}" | "\u{2CDA}" | "\u{2CDC}" | "\u{2CDE}" | "\u{2CE0}" | "\u{2CE2}" | "\u{2CEB}" | "\u{2CED}" | "\u{2CF2}" | "\u{A640}" | "\u{A642}" | "\u{A644}" | "\u{A646}" | "\u{A648}" | "\u{A64A}" | "\u{A64C}" | "\u{A64E}" | "\u{A650}" | "\u{A652}" | "\u{A654}" | "\u{A656}" | "\u{A658}" | "\u{A65A}" | "\u{A65C}" | "\u{A65E}" | "\u{A660}" | "\u{A662}" | "\u{A664}" | "\u{A666}" | "\u{A668}" | "\u{A66A}" | "\u{A66C}" | "\u{A680}" | "\u{A682}" | "\u{A684}" | "\u{A686}" | "\u{A688}" | "\u{A68A}" | "\u{A68C}" | "\u{A68E}" | "\u{A690}" | "\u{A692}" | "\u{A694}" | "\u{A696}" | "\u{A698}" | "\u{A69A}" | "\u{A722}" | "\u{A724}" | "\u{A726}" | "\u{A728}" | "\u{A72A}" | "\u{A72C}" | "\u{A72E}" | "\u{A732}" | "\u{A734}" | "\u{A736}" | "\u{A738}" | "\u{A73A}" | "\u{A73C}" | "\u{A73E}" | "\u{A740}" | "\u{A742}" | "\u{A744}" | "\u{A746}" | "\u{A748}" | "\u{A74A}" | "\u{A74C}" | "\u{A74E}" | "\u{A750}" | "\u{A752}" | "\u{A754}" | "\u{A756}" | "\u{A758}" | "\u{A75A}" | "\u{A75C}" | "\u{A75E}" | "\u{A760}" | "\u{A762}" | "\u{A764}" | "\u{A766}" | "\u{A768}" | "\u{A76A}" | "\u{A76C}" | "\u{A76E}" | "\u{A779}" | "\u{A77B}" | "\u{A77D}".."\u{A77E}" | "\u{A780}" | "\u{A782}" | "\u{A784}" | "\u{A786}" | "\u{A78B}" | "\u{A78D}" | "\u{A790}" | "\u{A792}" | "\u{A796}" | "\u{A798}" | "\u{A79A}" | "\u{A79C}" | "\u{A79E}" | "\u{A7A0}" | "\u{A7A2}" | "\u{A7A4}" | "\u{A7A6}" | "\u{A7A8}" | "\u{A7AA}".."\u{A7AE}" | "\u{A7B0}".."\u{A7B4}" | "\u{A7B6}" | "\u{A7B8}" | "\u{FF21}".."\u{FF3A}" | "\u{10400}".."\u{10427}" | "\u{104B0}".."\u{104D3}" | "\u{10C80}".."\u{10CB2}" | "\u{118A0}".."\u{118BF}" | "\u{16E40}".."\u{16E5F}" | "\u{1D400}".."\u{1D419}" | "\u{1D434}".."\u{1D44D}" | "\u{1D468}".."\u{1D481}" | "\u{1D49C}" | "\u{1D49E}".."\u{1D49F}" | "\u{1D4A2}" | "\u{1D4A5}".."\u{1D4A6}" | "\u{1D4A9}".."\u{1D4AC}" | "\u{1D4AE}".."\u{1D4B5}" | "\u{1D4D0}".."\u{1D4E9}" | "\u{1D504}".."\u{1D505}" | "\u{1D507}".."\u{1D50A}" | "\u{1D50D}".."\u{1D514}" | "\u{1D516}".."\u{1D51C}" | "\u{1D538}".."\u{1D539}" | "\u{1D53B}".."\u{1D53E}" | "\u{1D540}".."\u{1D544}" | "\u{1D546}" | "\u{1D54A}".."\u{1D550}" | "\u{1D56C}".."\u{1D585}" | "\u{1D5A0}".."\u{1D5B9}" | "\u{1D5D4}".."\u{1D5ED}" | "\u{1D608}".."\u{1D621}" | "\u{1D63C}".."\u{1D655}" | "\u{1D670}".."\u{1D689}" | "\u{1D6A8}".."\u{1D6C0}" | "\u{1D6E2}".."\u{1D6FA}" | "\u{1D71C}".."\u{1D734}" | "\u{1D756}".."\u{1D76E}" | "\u{1D790}".."\u{1D7A8}" | "\u{1D7CA}" | "\u{1E900}".."\u{1E921}"
+  unicode_lower <- "\u{61}".."\u{7A}" | "\u{B5}" | "\u{DF}".."\u{F6}" | "\u{F8}".."\u{FF}" | "\u{101}" | "\u{103}" | "\u{105}" | "\u{107}" | "\u{109}" | "\u{10B}" | "\u{10D}" | "\u{10F}" | "\u{111}" | "\u{113}" | "\u{115}" | "\u{117}" | "\u{119}" | "\u{11B}" | "\u{11D}" | "\u{11F}" | "\u{121}" | "\u{123}" | "\u{125}" | "\u{127}" | "\u{129}" | "\u{12B}" | "\u{12D}" | "\u{12F}" | "\u{131}" | "\u{133}" | "\u{135}" | "\u{137}".."\u{138}" | "\u{13A}" | "\u{13C}" | "\u{13E}" | "\u{140}" | "\u{142}" | "\u{144}" | "\u{146}" | "\u{148}".."\u{149}" | "\u{14B}" | "\u{14D}" | "\u{14F}" | "\u{151}" | "\u{153}" | "\u{155}" | "\u{157}" | "\u{159}" | "\u{15B}" | "\u{15D}" | "\u{15F}" | "\u{161}" | "\u{163}" | "\u{165}" | "\u{167}" | "\u{169}" | "\u{16B}" | "\u{16D}" | "\u{16F}" | "\u{171}" | "\u{173}" | "\u{175}" | "\u{177}" | "\u{17A}" | "\u{17C}" | "\u{17E}".."\u{180}" | "\u{183}" | "\u{185}" | "\u{188}" | "\u{18C}".."\u{18D}" | "\u{192}" | "\u{195}" | "\u{199}".."\u{19B}" | "\u{19E}" | "\u{1A1}" | "\u{1A3}" | "\u{1A5}" | "\u{1A8}" | "\u{1AA}".."\u{1AB}" | "\u{1AD}" | "\u{1B0}" | "\u{1B4}" | "\u{1B6}" | "\u{1B9}".."\u{1BA}" | "\u{1BD}".."\u{1BF}" | "\u{1C6}" | "\u{1C9}" | "\u{1CC}" | "\u{1CE}" | "\u{1D0}" | "\u{1D2}" | "\u{1D4}" | "\u{1D6}" | "\u{1D8}" | "\u{1DA}" | "\u{1DC}".."\u{1DD}" | "\u{1DF}" | "\u{1E1}" | "\u{1E3}" | "\u{1E5}" | "\u{1E7}" | "\u{1E9}" | "\u{1EB}" | "\u{1ED}" | "\u{1EF}".."\u{1F0}" | "\u{1F3}" | "\u{1F5}" | "\u{1F9}" | "\u{1FB}" | "\u{1FD}" | "\u{1FF}" | "\u{201}" | "\u{203}" | "\u{205}" | "\u{207}" | "\u{209}" | "\u{20B}" | "\u{20D}" | "\u{20F}" | "\u{211}" | "\u{213}" | "\u{215}" | "\u{217}" | "\u{219}" | "\u{21B}" | "\u{21D}" | "\u{21F}" | "\u{221}" | "\u{223}" | "\u{225}" | "\u{227}" | "\u{229}" | "\u{22B}" | "\u{22D}" | "\u{22F}" | "\u{231}" | "\u{233}".."\u{239}" | "\u{23C}" | "\u{23F}".."\u{240}" | "\u{242}" | "\u{247}" | "\u{249}" | "\u{24B}" | "\u{24D}" | "\u{24F}".."\u{293}" | "\u{295}".."\u{2AF}" | "\u{371}" | "\u{373}" | "\u{377}" | "\u{37B}".."\u{37D}" | "\u{390}" | "\u{3AC}".."\u{3CE}" | "\u{3D0}".."\u{3D1}" | "\u{3D5}".."\u{3D7}" | "\u{3D9}" | "\u{3DB}" | "\u{3DD}" | "\u{3DF}" | "\u{3E1}" | "\u{3E3}" | "\u{3E5}" | "\u{3E7}" | "\u{3E9}" | "\u{3EB}" | "\u{3ED}" | "\u{3EF}".."\u{3F3}" | "\u{3F5}" | "\u{3F8}" | "\u{3FB}".."\u{3FC}" | "\u{430}".."\u{45F}" | "\u{461}" | "\u{463}" | "\u{465}" | "\u{467}" | "\u{469}" | "\u{46B}" | "\u{46D}" | "\u{46F}" | "\u{471}" | "\u{473}" | "\u{475}" | "\u{477}" | "\u{479}" | "\u{47B}" | "\u{47D}" | "\u{47F}" | "\u{481}" | "\u{48B}" | "\u{48D}" | "\u{48F}" | "\u{491}" | "\u{493}" | "\u{495}" | "\u{497}" | "\u{499}" | "\u{49B}" | "\u{49D}" | "\u{49F}" | "\u{4A1}" | "\u{4A3}" | "\u{4A5}" | "\u{4A7}" | "\u{4A9}" | "\u{4AB}" | "\u{4AD}" | "\u{4AF}" | "\u{4B1}" | "\u{4B3}" | "\u{4B5}" | "\u{4B7}" | "\u{4B9}" | "\u{4BB}" | "\u{4BD}" | "\u{4BF}" | "\u{4C2}" | "\u{4C4}" | "\u{4C6}" | "\u{4C8}" | "\u{4CA}" | "\u{4CC}" | "\u{4CE}".."\u{4CF}" | "\u{4D1}" | "\u{4D3}" | "\u{4D5}" | "\u{4D7}" | "\u{4D9}" | "\u{4DB}" | "\u{4DD}" | "\u{4DF}" | "\u{4E1}" | "\u{4E3}" | "\u{4E5}" | "\u{4E7}" | "\u{4E9}" | "\u{4EB}" | "\u{4ED}" | "\u{4EF}" | "\u{4F1}" | "\u{4F3}" | "\u{4F5}" | "\u{4F7}" | "\u{4F9}" | "\u{4FB}" | "\u{4FD}" | "\u{4FF}" | "\u{501}" | "\u{503}" | "\u{505}" | "\u{507}" | "\u{509}" | "\u{50B}" | "\u{50D}" | "\u{50F}" | "\u{511}" | "\u{513}" | "\u{515}" | "\u{517}" | "\u{519}" | "\u{51B}" | "\u{51D}" | "\u{51F}" | "\u{521}" | "\u{523}" | "\u{525}" | "\u{527}" | "\u{529}" | "\u{52B}" | "\u{52D}" | "\u{52F}" | "\u{560}".."\u{588}" | "\u{10D0}".."\u{10FA}" | "\u{10FD}".."\u{10FF}" | "\u{13F8}".."\u{13FD}" | "\u{1C80}".."\u{1C88}" | "\u{1D00}".."\u{1D2B}" | "\u{1D6B}".."\u{1D77}" | "\u{1D79}".."\u{1D9A}" | "\u{1E01}" | "\u{1E03}" | "\u{1E05}" | "\u{1E07}" | "\u{1E09}" | "\u{1E0B}" | "\u{1E0D}" | "\u{1E0F}" | "\u{1E11}" | "\u{1E13}" | "\u{1E15}" | "\u{1E17}" | "\u{1E19}" | "\u{1E1B}" | "\u{1E1D}" | "\u{1E1F}" | "\u{1E21}" | "\u{1E23}" | "\u{1E25}" | "\u{1E27}" | "\u{1E29}" | "\u{1E2B}" | "\u{1E2D}" | "\u{1E2F}" | "\u{1E31}" | "\u{1E33}" | "\u{1E35}" | "\u{1E37}" | "\u{1E39}" | "\u{1E3B}" | "\u{1E3D}" | "\u{1E3F}" | "\u{1E41}" | "\u{1E43}" | "\u{1E45}" | "\u{1E47}" | "\u{1E49}" | "\u{1E4B}" | "\u{1E4D}" | "\u{1E4F}" | "\u{1E51}" | "\u{1E53}" | "\u{1E55}" | "\u{1E57}" | "\u{1E59}" | "\u{1E5B}" | "\u{1E5D}" | "\u{1E5F}" | "\u{1E61}" | "\u{1E63}" | "\u{1E65}" | "\u{1E67}" | "\u{1E69}" | "\u{1E6B}" | "\u{1E6D}" | "\u{1E6F}" | "\u{1E71}" | "\u{1E73}" | "\u{1E75}" | "\u{1E77}" | "\u{1E79}" | "\u{1E7B}" | "\u{1E7D}" | "\u{1E7F}" | "\u{1E81}" | "\u{1E83}" | "\u{1E85}" | "\u{1E87}" | "\u{1E89}" | "\u{1E8B}" | "\u{1E8D}" | "\u{1E8F}" | "\u{1E91}" | "\u{1E93}" | "\u{1E95}".."\u{1E9D}" | "\u{1E9F}" | "\u{1EA1}" | "\u{1EA3}" | "\u{1EA5}" | "\u{1EA7}" | "\u{1EA9}" | "\u{1EAB}" | "\u{1EAD}" | "\u{1EAF}" | "\u{1EB1}" | "\u{1EB3}" | "\u{1EB5}" | "\u{1EB7}" | "\u{1EB9}" | "\u{1EBB}" | "\u{1EBD}" | "\u{1EBF}" | "\u{1EC1}" | "\u{1EC3}" | "\u{1EC5}" | "\u{1EC7}" | "\u{1EC9}" | "\u{1ECB}" | "\u{1ECD}" | "\u{1ECF}" | "\u{1ED1}" | "\u{1ED3}" | "\u{1ED5}" | "\u{1ED7}" | "\u{1ED9}" | "\u{1EDB}" | "\u{1EDD}" | "\u{1EDF}" | "\u{1EE1}" | "\u{1EE3}" | "\u{1EE5}" | "\u{1EE7}" | "\u{1EE9}" | "\u{1EEB}" | "\u{1EED}" | "\u{1EEF}" | "\u{1EF1}" | "\u{1EF3}" | "\u{1EF5}" | "\u{1EF7}" | "\u{1EF9}" | "\u{1EFB}" | "\u{1EFD}" | "\u{1EFF}".."\u{1F07}" | "\u{1F10}".."\u{1F15}" | "\u{1F20}".."\u{1F27}" | "\u{1F30}".."\u{1F37}" | "\u{1F40}".."\u{1F45}" | "\u{1F50}".."\u{1F57}" | "\u{1F60}".."\u{1F67}" | "\u{1F70}".."\u{1F7D}" | "\u{1F80}".."\u{1F87}" | "\u{1F90}".."\u{1F97}" | "\u{1FA0}".."\u{1FA7}" | "\u{1FB0}".."\u{1FB4}" | "\u{1FB6}".."\u{1FB7}" | "\u{1FBE}" | "\u{1FC2}".."\u{1FC4}" | "\u{1FC6}".."\u{1FC7}" | "\u{1FD0}".."\u{1FD3}" | "\u{1FD6}".."\u{1FD7}" | "\u{1FE0}".."\u{1FE7}" | "\u{1FF2}".."\u{1FF4}" | "\u{1FF6}".."\u{1FF7}" | "\u{210A}" | "\u{210E}".."\u{210F}" | "\u{2113}" | "\u{212F}" | "\u{2134}" | "\u{2139}" | "\u{213C}".."\u{213D}" | "\u{2146}".."\u{2149}" | "\u{214E}" | "\u{2184}" | "\u{2C30}".."\u{2C5E}" | "\u{2C61}" | "\u{2C65}".."\u{2C66}" | "\u{2C68}" | "\u{2C6A}" | "\u{2C6C}" | "\u{2C71}" | "\u{2C73}".."\u{2C74}" | "\u{2C76}".."\u{2C7B}" | "\u{2C81}" | "\u{2C83}" | "\u{2C85}" | "\u{2C87}" | "\u{2C89}" | "\u{2C8B}" | "\u{2C8D}" | "\u{2C8F}" | "\u{2C91}" | "\u{2C93}" | "\u{2C95}" | "\u{2C97}" | "\u{2C99}" | "\u{2C9B}" | "\u{2C9D}" | "\u{2C9F}" | "\u{2CA1}" | "\u{2CA3}" | "\u{2CA5}" | "\u{2CA7}" | "\u{2CA9}" | "\u{2CAB}" | "\u{2CAD}" | "\u{2CAF}" | "\u{2CB1}" | "\u{2CB3}" | "\u{2CB5}" | "\u{2CB7}" | "\u{2CB9}" | "\u{2CBB}" | "\u{2CBD}" | "\u{2CBF}" | "\u{2CC1}" | "\u{2CC3}" | "\u{2CC5}" | "\u{2CC7}" | "\u{2CC9}" | "\u{2CCB}" | "\u{2CCD}" | "\u{2CCF}" | "\u{2CD1}" | "\u{2CD3}" | "\u{2CD5}" | "\u{2CD7}" | "\u{2CD9}" | "\u{2CDB}" | "\u{2CDD}" | "\u{2CDF}" | "\u{2CE1}" | "\u{2CE3}".."\u{2CE4}" | "\u{2CEC}" | "\u{2CEE}" | "\u{2CF3}" | "\u{2D00}".."\u{2D25}" | "\u{2D27}" | "\u{2D2D}" | "\u{A641}" | "\u{A643}" | "\u{A645}" | "\u{A647}" | "\u{A649}" | "\u{A64B}" | "\u{A64D}" | "\u{A64F}" | "\u{A651}" | "\u{A653}" | "\u{A655}" | "\u{A657}" | "\u{A659}" | "\u{A65B}" | "\u{A65D}" | "\u{A65F}" | "\u{A661}" | "\u{A663}" | "\u{A665}" | "\u{A667}" | "\u{A669}" | "\u{A66B}" | "\u{A66D}" | "\u{A681}" | "\u{A683}" | "\u{A685}" | "\u{A687}" | "\u{A689}" | "\u{A68B}" | "\u{A68D}" | "\u{A68F}" | "\u{A691}" | "\u{A693}" | "\u{A695}" | "\u{A697}" | "\u{A699}" | "\u{A69B}" | "\u{A723}" | "\u{A725}" | "\u{A727}" | "\u{A729}" | "\u{A72B}" | "\u{A72D}" | "\u{A72F}".."\u{A731}" | "\u{A733}" | "\u{A735}" | "\u{A737}" | "\u{A739}" | "\u{A73B}" | "\u{A73D}" | "\u{A73F}" | "\u{A741}" | "\u{A743}" | "\u{A745}" | "\u{A747}" | "\u{A749}" | "\u{A74B}" | "\u{A74D}" | "\u{A74F}" | "\u{A751}" | "\u{A753}" | "\u{A755}" | "\u{A757}" | "\u{A759}" | "\u{A75B}" | "\u{A75D}" | "\u{A75F}" | "\u{A761}" | "\u{A763}" | "\u{A765}" | "\u{A767}" | "\u{A769}" | "\u{A76B}" | "\u{A76D}" | "\u{A76F}" | "\u{A771}".."\u{A778}" | "\u{A77A}" | "\u{A77C}" | "\u{A77F}" | "\u{A781}" | "\u{A783}" | "\u{A785}" | "\u{A787}" | "\u{A78C}" | "\u{A78E}" | "\u{A791}" | "\u{A793}".."\u{A795}" | "\u{A797}" | "\u{A799}" | "\u{A79B}" | "\u{A79D}" | "\u{A79F}" | "\u{A7A1}" | "\u{A7A3}" | "\u{A7A5}" | "\u{A7A7}" | "\u{A7A9}" | "\u{A7AF}" | "\u{A7B5}" | "\u{A7B7}" | "\u{A7B9}" | "\u{A7FA}" | "\u{AB30}".."\u{AB5A}" | "\u{AB60}".."\u{AB65}" | "\u{AB70}".."\u{ABBF}" | "\u{FB00}".."\u{FB06}" | "\u{FB13}".."\u{FB17}" | "\u{FF41}".."\u{FF5A}" | "\u{10428}".."\u{1044F}" | "\u{104D8}".."\u{104FB}" | "\u{10CC0}".."\u{10CF2}" | "\u{118C0}".."\u{118DF}" | "\u{16E60}".."\u{16E7F}" | "\u{1D41A}".."\u{1D433}" | "\u{1D44E}".."\u{1D454}" | "\u{1D456}".."\u{1D467}" | "\u{1D482}".."\u{1D49B}" | "\u{1D4B6}".."\u{1D4B9}" | "\u{1D4BB}" | "\u{1D4BD}".."\u{1D4C3}" | "\u{1D4C5}".."\u{1D4CF}" | "\u{1D4EA}".."\u{1D503}" | "\u{1D51E}".."\u{1D537}" | "\u{1D552}".."\u{1D56B}" | "\u{1D586}".."\u{1D59F}" | "\u{1D5BA}".."\u{1D5D3}" | "\u{1D5EE}".."\u{1D607}" | "\u{1D622}".."\u{1D63B}" | "\u{1D656}".."\u{1D66F}" | "\u{1D68A}".."\u{1D6A5}" | "\u{1D6C2}".."\u{1D6DA}" | "\u{1D6DC}".."\u{1D6E1}" | "\u{1D6FC}".."\u{1D714}" | "\u{1D716}".."\u{1D71B}" | "\u{1D736}".."\u{1D74E}" | "\u{1D750}".."\u{1D755}" | "\u{1D770}".."\u{1D788}" | "\u{1D78A}".."\u{1D78F}" | "\u{1D7AA}".."\u{1D7C2}" | "\u{1D7C4}".."\u{1D7C9}" | "\u{1D7CB}" | "\u{1E922}".."\u{1E943}"
+  unicode_titlecase <- "\u{1C5}" | "\u{1C8}" | "\u{1CB}" | "\u{1F2}" | "\u{1F88}".."\u{1F8F}" | "\u{1F98}".."\u{1F9F}" | "\u{1FA8}".."\u{1FAF}" | "\u{1FBC}" | "\u{1FCC}" | "\u{1FFC}"
+  unicode_modifier <- "\u{2B0}".."\u{2C1}" | "\u{2C6}".."\u{2D1}" | "\u{2E0}".."\u{2E4}" | "\u{2EC}" | "\u{2EE}" | "\u{374}" | "\u{37A}" | "\u{559}" | "\u{640}" | "\u{6E5}".."\u{6E6}" | "\u{7F4}".."\u{7F5}" | "\u{7FA}" | "\u{81A}" | "\u{824}" | "\u{828}" | "\u{971}" | "\u{E46}" | "\u{EC6}" | "\u{10FC}" | "\u{17D7}" | "\u{1843}" | "\u{1AA7}" | "\u{1C78}".."\u{1C7D}" | "\u{1D2C}".."\u{1D6A}" | "\u{1D78}" | "\u{1D9B}".."\u{1DBF}" | "\u{2071}" | "\u{207F}" | "\u{2090}".."\u{209C}" | "\u{2C7C}".."\u{2C7D}" | "\u{2D6F}" | "\u{2E2F}" | "\u{3005}" | "\u{3031}".."\u{3035}" | "\u{303B}" | "\u{309D}".."\u{309E}" | "\u{30FC}".."\u{30FE}" | "\u{A015}" | "\u{A4F8}".."\u{A4FD}" | "\u{A60C}" | "\u{A67F}" | "\u{A69C}".."\u{A69D}" | "\u{A717}".."\u{A71F}" | "\u{A770}" | "\u{A788}" | "\u{A7F8}".."\u{A7F9}" | "\u{A9CF}" | "\u{A9E6}" | "\u{AA70}" | "\u{AADD}" | "\u{AAF3}".."\u{AAF4}" | "\u{AB5C}".."\u{AB5F}" | "\u{FF70}" | "\u{FF9E}".."\u{FF9F}" | "\u{16B40}".."\u{16B43}" | "\u{16F93}".."\u{16F9F}" | "\u{16FE0}".."\u{16FE1}"
+  unicode_other_letter <- "\u{AA}" | "\u{BA}" | "\u{1BB}" | "\u{1C0}".."\u{1C3}" | "\u{294}" | "\u{5D0}".."\u{5EA}" | "\u{5EF}".."\u{5F2}" | "\u{620}".."\u{63F}" | "\u{641}".."\u{64A}" | "\u{66E}".."\u{66F}" | "\u{671}".."\u{6D3}" | "\u{6D5}" | "\u{6EE}".."\u{6EF}" | "\u{6FA}".."\u{6FC}" | "\u{6FF}" | "\u{710}" | "\u{712}".."\u{72F}" | "\u{74D}".."\u{7A5}" | "\u{7B1}" | "\u{7CA}".."\u{7EA}" | "\u{800}".."\u{815}" | "\u{840}".."\u{858}" | "\u{860}".."\u{86A}" | "\u{8A0}".."\u{8B4}" | "\u{8B6}".."\u{8BD}" | "\u{904}".."\u{939}" | "\u{93D}" | "\u{950}" | "\u{958}".."\u{961}" | "\u{972}".."\u{980}" | "\u{985}".."\u{98C}" | "\u{98F}".."\u{990}" | "\u{993}".."\u{9A8}" | "\u{9AA}".."\u{9B0}" | "\u{9B2}" | "\u{9B6}".."\u{9B9}" | "\u{9BD}" | "\u{9CE}" | "\u{9DC}".."\u{9DD}" | "\u{9DF}".."\u{9E1}" | "\u{9F0}".."\u{9F1}" | "\u{9FC}" | "\u{A05}".."\u{A0A}" | "\u{A0F}".."\u{A10}" | "\u{A13}".."\u{A28}" | "\u{A2A}".."\u{A30}" | "\u{A32}".."\u{A33}" | "\u{A35}".."\u{A36}" | "\u{A38}".."\u{A39}" | "\u{A59}".."\u{A5C}" | "\u{A5E}" | "\u{A72}".."\u{A74}" | "\u{A85}".."\u{A8D}" | "\u{A8F}".."\u{A91}" | "\u{A93}".."\u{AA8}" | "\u{AAA}".."\u{AB0}" | "\u{AB2}".."\u{AB3}" | "\u{AB5}".."\u{AB9}" | "\u{ABD}" | "\u{AD0}" | "\u{AE0}".."\u{AE1}" | "\u{AF9}" | "\u{B05}".."\u{B0C}" | "\u{B0F}".."\u{B10}" | "\u{B13}".."\u{B28}" | "\u{B2A}".."\u{B30}" | "\u{B32}".."\u{B33}" | "\u{B35}".."\u{B39}" | "\u{B3D}" | "\u{B5C}".."\u{B5D}" | "\u{B5F}".."\u{B61}" | "\u{B71}" | "\u{B83}" | "\u{B85}".."\u{B8A}" | "\u{B8E}".."\u{B90}" | "\u{B92}".."\u{B95}" | "\u{B99}".."\u{B9A}" | "\u{B9C}" | "\u{B9E}".."\u{B9F}" | "\u{BA3}".."\u{BA4}" | "\u{BA8}".."\u{BAA}" | "\u{BAE}".."\u{BB9}" | "\u{BD0}" | "\u{C05}".."\u{C0C}" | "\u{C0E}".."\u{C10}" | "\u{C12}".."\u{C28}" | "\u{C2A}".."\u{C39}" | "\u{C3D}" | "\u{C58}".."\u{C5A}" | "\u{C60}".."\u{C61}" | "\u{C80}" | "\u{C85}".."\u{C8C}" | "\u{C8E}".."\u{C90}" | "\u{C92}".."\u{CA8}" | "\u{CAA}".."\u{CB3}" | "\u{CB5}".."\u{CB9}" | "\u{CBD}" | "\u{CDE}" | "\u{CE0}".."\u{CE1}" | "\u{CF1}".."\u{CF2}" | "\u{D05}".."\u{D0C}" | "\u{D0E}".."\u{D10}" | "\u{D12}".."\u{D3A}" | "\u{D3D}" | "\u{D4E}" | "\u{D54}".."\u{D56}" | "\u{D5F}".."\u{D61}" | "\u{D7A}".."\u{D7F}" | "\u{D85}".."\u{D96}" | "\u{D9A}".."\u{DB1}" | "\u{DB3}".."\u{DBB}" | "\u{DBD}" | "\u{DC0}".."\u{DC6}" | "\u{E01}".."\u{E30}" | "\u{E32}".."\u{E33}" | "\u{E40}".."\u{E45}" | "\u{E81}".."\u{E82}" | "\u{E84}" | "\u{E87}".."\u{E88}" | "\u{E8A}" | "\u{E8D}" | "\u{E94}".."\u{E97}" | "\u{E99}".."\u{E9F}" | "\u{EA1}".."\u{EA3}" | "\u{EA5}" | "\u{EA7}" | "\u{EAA}".."\u{EAB}" | "\u{EAD}".."\u{EB0}" | "\u{EB2}".."\u{EB3}" | "\u{EBD}" | "\u{EC0}".."\u{EC4}" | "\u{EDC}".."\u{EDF}" | "\u{F00}" | "\u{F40}".."\u{F47}" | "\u{F49}".."\u{F6C}" | "\u{F88}".."\u{F8C}" | "\u{1000}".."\u{102A}" | "\u{103F}" | "\u{1050}".."\u{1055}" | "\u{105A}".."\u{105D}" | "\u{1061}" | "\u{1065}".."\u{1066}" | "\u{106E}".."\u{1070}" | "\u{1075}".."\u{1081}" | "\u{108E}" | "\u{1100}".."\u{1248}" | "\u{124A}".."\u{124D}" | "\u{1250}".."\u{1256}" | "\u{1258}" | "\u{125A}".."\u{125D}" | "\u{1260}".."\u{1288}" | "\u{128A}".."\u{128D}" | "\u{1290}".."\u{12B0}" | "\u{12B2}".."\u{12B5}" | "\u{12B8}".."\u{12BE}" | "\u{12C0}" | "\u{12C2}".."\u{12C5}" | "\u{12C8}".."\u{12D6}" | "\u{12D8}".."\u{1310}" | "\u{1312}".."\u{1315}" | "\u{1318}".."\u{135A}" | "\u{1380}".."\u{138F}" | "\u{1401}".."\u{166C}" | "\u{166F}".."\u{167F}" | "\u{1681}".."\u{169A}" | "\u{16A0}".."\u{16EA}" | "\u{16F1}".."\u{16F8}" | "\u{1700}".."\u{170C}" | "\u{170E}".."\u{1711}" | "\u{1720}".."\u{1731}" | "\u{1740}".."\u{1751}" | "\u{1760}".."\u{176C}" | "\u{176E}".."\u{1770}" | "\u{1780}".."\u{17B3}" | "\u{17DC}" | "\u{1820}".."\u{1842}" | "\u{1844}".."\u{1878}" | "\u{1880}".."\u{1884}" | "\u{1887}".."\u{18A8}" | "\u{18AA}" | "\u{18B0}".."\u{18F5}" | "\u{1900}".."\u{191E}" | "\u{1950}".."\u{196D}" | "\u{1970}".."\u{1974}" | "\u{1980}".."\u{19AB}" | "\u{19B0}".."\u{19C9}" | "\u{1A00}".."\u{1A16}" | "\u{1A20}".."\u{1A54}" | "\u{1B05}".."\u{1B33}" | "\u{1B45}".."\u{1B4B}" | "\u{1B83}".."\u{1BA0}" | "\u{1BAE}".."\u{1BAF}" | "\u{1BBA}".."\u{1BE5}" | "\u{1C00}".."\u{1C23}" | "\u{1C4D}".."\u{1C4F}" | "\u{1C5A}".."\u{1C77}" | "\u{1CE9}".."\u{1CEC}" | "\u{1CEE}".."\u{1CF1}" | "\u{1CF5}".."\u{1CF6}" | "\u{2135}".."\u{2138}" | "\u{2D30}".."\u{2D67}" | "\u{2D80}".."\u{2D96}" | "\u{2DA0}".."\u{2DA6}" | "\u{2DA8}".."\u{2DAE}" | "\u{2DB0}".."\u{2DB6}" | "\u{2DB8}".."\u{2DBE}" | "\u{2DC0}".."\u{2DC6}" | "\u{2DC8}".."\u{2DCE}" | "\u{2DD0}".."\u{2DD6}" | "\u{2DD8}".."\u{2DDE}" | "\u{3006}" | "\u{303C}" | "\u{3041}".."\u{3096}" | "\u{309F}" | "\u{30A1}".."\u{30FA}" | "\u{30FF}" | "\u{3105}".."\u{312F}" | "\u{3131}".."\u{318E}" | "\u{31A0}".."\u{31BA}" | "\u{31F0}".."\u{31FF}" | "\u{3400}".."\u{4DB5}" | "\u{4E00}".."\u{9FEF}" | "\u{A000}".."\u{A014}" | "\u{A016}".."\u{A48C}" | "\u{A4D0}".."\u{A4F7}" | "\u{A500}".."\u{A60B}" | "\u{A610}".."\u{A61F}" | "\u{A62A}".."\u{A62B}" | "\u{A66E}" | "\u{A6A0}".."\u{A6E5}" | "\u{A78F}" | "\u{A7F7}" | "\u{A7FB}".."\u{A801}" | "\u{A803}".."\u{A805}" | "\u{A807}".."\u{A80A}" | "\u{A80C}".."\u{A822}" | "\u{A840}".."\u{A873}" | "\u{A882}".."\u{A8B3}" | "\u{A8F2}".."\u{A8F7}" | "\u{A8FB}" | "\u{A8FD}".."\u{A8FE}" | "\u{A90A}".."\u{A925}" | "\u{A930}".."\u{A946}" | "\u{A960}".."\u{A97C}" | "\u{A984}".."\u{A9B2}" | "\u{A9E0}".."\u{A9E4}" | "\u{A9E7}".."\u{A9EF}" | "\u{A9FA}".."\u{A9FE}" | "\u{AA00}".."\u{AA28}" | "\u{AA40}".."\u{AA42}" | "\u{AA44}".."\u{AA4B}" | "\u{AA60}".."\u{AA6F}" | "\u{AA71}".."\u{AA76}" | "\u{AA7A}" | "\u{AA7E}".."\u{AAAF}" | "\u{AAB1}" | "\u{AAB5}".."\u{AAB6}" | "\u{AAB9}".."\u{AABD}" | "\u{AAC0}" | "\u{AAC2}" | "\u{AADB}".."\u{AADC}" | "\u{AAE0}".."\u{AAEA}" | "\u{AAF2}" | "\u{AB01}".."\u{AB06}" | "\u{AB09}".."\u{AB0E}" | "\u{AB11}".."\u{AB16}" | "\u{AB20}".."\u{AB26}" | "\u{AB28}".."\u{AB2E}" | "\u{ABC0}".."\u{ABE2}" | "\u{AC00}".."\u{D7A3}" | "\u{D7B0}".."\u{D7C6}" | "\u{D7CB}".."\u{D7FB}" | "\u{F900}".."\u{FA6D}" | "\u{FA70}".."\u{FAD9}" | "\u{FB1D}" | "\u{FB1F}".."\u{FB28}" | "\u{FB2A}".."\u{FB36}" | "\u{FB38}".."\u{FB3C}" | "\u{FB3E}" | "\u{FB40}".."\u{FB41}" | "\u{FB43}".."\u{FB44}" | "\u{FB46}".."\u{FBB1}" | "\u{FBD3}".."\u{FD3D}" | "\u{FD50}".."\u{FD8F}" | "\u{FD92}".."\u{FDC7}" | "\u{FDF0}".."\u{FDFB}" | "\u{FE70}".."\u{FE74}" | "\u{FE76}".."\u{FEFC}" | "\u{FF66}".."\u{FF6F}" | "\u{FF71}".."\u{FF9D}" | "\u{FFA0}".."\u{FFBE}" | "\u{FFC2}".."\u{FFC7}" | "\u{FFCA}".."\u{FFCF}" | "\u{FFD2}".."\u{FFD7}" | "\u{FFDA}".."\u{FFDC}" | "\u{10000}".."\u{1000B}" | "\u{1000D}".."\u{10026}" | "\u{10028}".."\u{1003A}" | "\u{1003C}".."\u{1003D}" | "\u{1003F}".."\u{1004D}" | "\u{10050}".."\u{1005D}" | "\u{10080}".."\u{100FA}" | "\u{10280}".."\u{1029C}" | "\u{102A0}".."\u{102D0}" | "\u{10300}".."\u{1031F}" | "\u{1032D}".."\u{10340}" | "\u{10342}".."\u{10349}" | "\u{10350}".."\u{10375}" | "\u{10380}".."\u{1039D}" | "\u{103A0}".."\u{103C3}" | "\u{103C8}".."\u{103CF}" | "\u{10450}".."\u{1049D}" | "\u{10500}".."\u{10527}" | "\u{10530}".."\u{10563}" | "\u{10600}".."\u{10736}" | "\u{10740}".."\u{10755}" | "\u{10760}".."\u{10767}" | "\u{10800}".."\u{10805}" | "\u{10808}" | "\u{1080A}".."\u{10835}" | "\u{10837}".."\u{10838}" | "\u{1083C}" | "\u{1083F}".."\u{10855}" | "\u{10860}".."\u{10876}" | "\u{10880}".."\u{1089E}" | "\u{108E0}".."\u{108F2}" | "\u{108F4}".."\u{108F5}" | "\u{10900}".."\u{10915}" | "\u{10920}".."\u{10939}" | "\u{10980}".."\u{109B7}" | "\u{109BE}".."\u{109BF}" | "\u{10A00}" | "\u{10A10}".."\u{10A13}" | "\u{10A15}".."\u{10A17}" | "\u{10A19}".."\u{10A35}" | "\u{10A60}".."\u{10A7C}" | "\u{10A80}".."\u{10A9C}" | "\u{10AC0}".."\u{10AC7}" | "\u{10AC9}".."\u{10AE4}" | "\u{10B00}".."\u{10B35}" | "\u{10B40}".."\u{10B55}" | "\u{10B60}".."\u{10B72}" | "\u{10B80}".."\u{10B91}" | "\u{10C00}".."\u{10C48}" | "\u{10D00}".."\u{10D23}" | "\u{10F00}".."\u{10F1C}" | "\u{10F27}" | "\u{10F30}".."\u{10F45}" | "\u{11003}".."\u{11037}" | "\u{11083}".."\u{110AF}" | "\u{110D0}".."\u{110E8}" | "\u{11103}".."\u{11126}" | "\u{11144}" | "\u{11150}".."\u{11172}" | "\u{11176}" | "\u{11183}".."\u{111B2}" | "\u{111C1}".."\u{111C4}" | "\u{111DA}" | "\u{111DC}" | "\u{11200}".."\u{11211}" | "\u{11213}".."\u{1122B}" | "\u{11280}".."\u{11286}" | "\u{11288}" | "\u{1128A}".."\u{1128D}" | "\u{1128F}".."\u{1129D}" | "\u{1129F}".."\u{112A8}" | "\u{112B0}".."\u{112DE}" | "\u{11305}".."\u{1130C}" | "\u{1130F}".."\u{11310}" | "\u{11313}".."\u{11328}" | "\u{1132A}".."\u{11330}" | "\u{11332}".."\u{11333}" | "\u{11335}".."\u{11339}" | "\u{1133D}" | "\u{11350}" | "\u{1135D}".."\u{11361}" | "\u{11400}".."\u{11434}" | "\u{11447}".."\u{1144A}" | "\u{11480}".."\u{114AF}" | "\u{114C4}".."\u{114C5}" | "\u{114C7}" | "\u{11580}".."\u{115AE}" | "\u{115D8}".."\u{115DB}" | "\u{11600}".."\u{1162F}" | "\u{11644}" | "\u{11680}".."\u{116AA}" | "\u{11700}".."\u{1171A}" | "\u{11800}".."\u{1182B}" | "\u{118FF}" | "\u{11A00}" | "\u{11A0B}".."\u{11A32}" | "\u{11A3A}" | "\u{11A50}" | "\u{11A5C}".."\u{11A83}" | "\u{11A86}".."\u{11A89}" | "\u{11A9D}" | "\u{11AC0}".."\u{11AF8}" | "\u{11C00}".."\u{11C08}" | "\u{11C0A}".."\u{11C2E}" | "\u{11C40}" | "\u{11C72}".."\u{11C8F}" | "\u{11D00}".."\u{11D06}" | "\u{11D08}".."\u{11D09}" | "\u{11D0B}".."\u{11D30}" | "\u{11D46}" | "\u{11D60}".."\u{11D65}" | "\u{11D67}".."\u{11D68}" | "\u{11D6A}".."\u{11D89}" | "\u{11D98}" | "\u{11EE0}".."\u{11EF2}" | "\u{12000}".."\u{12399}" | "\u{12480}".."\u{12543}" | "\u{13000}".."\u{1342E}" | "\u{14400}".."\u{14646}" | "\u{16800}".."\u{16A38}" | "\u{16A40}".."\u{16A5E}" | "\u{16AD0}".."\u{16AED}" | "\u{16B00}".."\u{16B2F}" | "\u{16B63}".."\u{16B77}" | "\u{16B7D}".."\u{16B8F}" | "\u{16F00}".."\u{16F44}" | "\u{16F50}" | "\u{17000}".."\u{187F1}" | "\u{18800}".."\u{18AF2}" | "\u{1B000}".."\u{1B11E}" | "\u{1B170}".."\u{1B2FB}" | "\u{1BC00}".."\u{1BC6A}" | "\u{1BC70}".."\u{1BC7C}" | "\u{1BC80}".."\u{1BC88}" | "\u{1BC90}".."\u{1BC99}" | "\u{1E800}".."\u{1E8C4}" | "\u{1EE00}".."\u{1EE03}" | "\u{1EE05}".."\u{1EE1F}" | "\u{1EE21}".."\u{1EE22}" | "\u{1EE24}" | "\u{1EE27}" | "\u{1EE29}".."\u{1EE32}" | "\u{1EE34}".."\u{1EE37}" | "\u{1EE39}" | "\u{1EE3B}" | "\u{1EE42}" | "\u{1EE47}" | "\u{1EE49}" | "\u{1EE4B}" | "\u{1EE4D}".."\u{1EE4F}" | "\u{1EE51}".."\u{1EE52}" | "\u{1EE54}" | "\u{1EE57}" | "\u{1EE59}" | "\u{1EE5B}" | "\u{1EE5D}" | "\u{1EE5F}" | "\u{1EE61}".."\u{1EE62}" | "\u{1EE64}" | "\u{1EE67}".."\u{1EE6A}" | "\u{1EE6C}".."\u{1EE72}" | "\u{1EE74}".."\u{1EE77}" | "\u{1EE79}".."\u{1EE7C}" | "\u{1EE7E}" | "\u{1EE80}".."\u{1EE89}" | "\u{1EE8B}".."\u{1EE9B}" | "\u{1EEA1}".."\u{1EEA3}" | "\u{1EEA5}".."\u{1EEA9}" | "\u{1EEAB}".."\u{1EEBB}" | "\u{20000}".."\u{2A6D6}" | "\u{2A700}".."\u{2B734}" | "\u{2B740}".."\u{2B81D}" | "\u{2B820}".."\u{2CEA1}" | "\u{2CEB0}".."\u{2EBE0}" | "\u{2F800}".."\u{2FA1D}"
+  unicode_letter <- unicode_upper | unicode_lower | unicode_titlecase | unicode_modifier | unicode_other_letter
+}
