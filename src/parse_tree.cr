@@ -15,7 +15,7 @@ module Arborist
   # A nil parse tree means parse error
   # ParseTree is an abstract base class that defines one required field: finishing_pos : Int32
   class ParseTree   # rename this to SyntaxNode
-    property input : String
+    property input : CharArray
     property label : String?
     property start_pos : Int32      # the position within the input string that points at teh first character this parse tree captures
     property finishing_pos : Int32  # the position within the input string that points at the last character this parse tree captures
@@ -39,7 +39,7 @@ module Arborist
     # <node attributes specific to the type of node (e.g. ApplyTree has a `rule_name` attribute; TerminalTree has a `str` attribute; etc.)>
     def self.to_msgpack(parse_tree : ParseTree) : Bytes
       packer = MessagePack::Packer.new
-      parse_tree.input.to_msgpack(packer)
+      parse_tree.input.to_s.to_msgpack(packer)
       parse_tree.postorder_traverse do |parse_tree_node|
         parse_tree_node.to_msgpack(packer)
       end
@@ -47,7 +47,7 @@ module Arborist
     end
 
     def initialize
-      @input = ""
+      @input = CharArray.new("")
       @label = nil
       @start_pos = -1
       @finishing_pos = -1
@@ -257,7 +257,7 @@ module Arborist
     property rule_name : String
     property tree : ParseTree
 
-    def initialize(@tree, @rule_name, @input, @start_pos, @finishing_pos)
+    def initialize(@tree, @rule_name, @input : CharArray, @start_pos, @finishing_pos)
     end
 
     def label(label : String?) : ApplyTree
@@ -296,7 +296,7 @@ module Arborist
   class ChoiceTree < ParseTree
     property tree : ParseTree
 
-    def initialize(@tree, @input, @start_pos, @finishing_pos)
+    def initialize(@tree, @input : CharArray, @start_pos, @finishing_pos)
     end
 
     def label(label : String?) : ChoiceTree
@@ -327,7 +327,7 @@ module Arborist
   class SequenceTree < ParseTree
     property seq : Array(ParseTree)
     
-    def initialize(@seq, @input, @start_pos, @finishing_pos)
+    def initialize(@seq, @input : CharArray, @start_pos, @finishing_pos)
     end
 
     def label(label : String?) : SequenceTree
@@ -363,7 +363,7 @@ module Arborist
   class TerminalTree < ParseTree
     property str : String
     
-    def initialize(@str, @input, @start_pos, @finishing_pos)
+    def initialize(@str, @input : CharArray, @start_pos, @finishing_pos)
     end
     
     def label(label : String?) : TerminalTree
@@ -402,7 +402,7 @@ module Arborist
   class MutexAltTree < ParseTree
     property str : String
     
-    def initialize(@str, @input, @start_pos, @finishing_pos)
+    def initialize(@str, @input : CharArray, @start_pos, @finishing_pos)
     end
     
     def label(label : String?) : MutexAltTree
@@ -441,7 +441,7 @@ module Arborist
   class NegLookAheadTree < ParseTree
     property succeed : Bool
 
-    def initialize(@succeed, @input, @start_pos)
+    def initialize(@succeed, @input : CharArray, @start_pos)
       @finishing_pos = -1
     end
 
@@ -476,7 +476,7 @@ module Arborist
   class PosLookAheadTree < ParseTree
     property succeed : Bool
 
-    def initialize(@succeed, @input, @start_pos)
+    def initialize(@succeed, @input : CharArray, @start_pos)
       @finishing_pos = -1
     end
 
@@ -511,7 +511,7 @@ module Arborist
   class OptionalTree < ParseTree
     property tree : ParseTree?
 
-    def initialize(@tree, @input, @start_pos, @finishing_pos)
+    def initialize(@tree, @input : CharArray, @start_pos, @finishing_pos)
     end
 
     def label(label : String?) : OptionalTree
@@ -547,7 +547,7 @@ module Arborist
   class RepetitionTree < ParseTree
     property trees : Array(ParseTree)
 
-    def initialize(@trees, @input, @start_pos, @finishing_pos)
+    def initialize(@trees, @input : CharArray, @start_pos, @finishing_pos)
     end
 
     def label(label : String?) : RepetitionTree

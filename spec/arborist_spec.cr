@@ -719,9 +719,9 @@ describe Arborist do
     describe "parent/children relationship" do
       it "can be navigated via parent field" do
         input = "123456"
-        t1 = TerminalTree.new(input[0..2], input, 0, 2)
-        t2 = TerminalTree.new(input[3..5], input, 3, 5)
-        s1 = SequenceTree.new([t1, t2] of ParseTree, input, 0, 5)
+        t1 = TerminalTree.new(input[0..2], CharArray.new(input), 0, 2)
+        t2 = TerminalTree.new(input[3..5], CharArray.new(input), 3, 5)
+        s1 = SequenceTree.new([t1, t2] of ParseTree, CharArray.new(input), 0, 5)
 
         s1.recursively_populate_parents
 
@@ -734,18 +734,19 @@ describe Arborist do
         # equality_comparison = lhs=range "==" rhs=range
         # range = nums:[0-9]+ ".." nums:[0-9]+
         input = "111..222==333..444"
-        t1 = TerminalTree.new(input[0..2], input, 0, 2).label("nums")
-        dots1  = TerminalTree.new(input[3..4], input, 3, 4)
-        t2 = TerminalTree.new(input[5..7], input, 5, 7).label("nums")
-        equals1  = TerminalTree.new(input[8..9], input, 8, 9)
-        t3 = TerminalTree.new(input[10..12], input, 10, 12).label("nums")
-        dots2  = TerminalTree.new(input[13..14], input, 13, 14)
-        t4 = TerminalTree.new(input[15..17], input, 15, 17).label("nums")
-        seq_range1 = SequenceTree.new([t1, dots1, t2] of ParseTree, input, 0, 7)
-        seq_range2 = SequenceTree.new([t3, dots2, t4] of ParseTree, input, 10, 17)
-        lhs = ApplyTree.new(seq_range1, "range", input, 0, 7).label("lhs")
-        rhs = ApplyTree.new(seq_range2, "range", input, 10, 17).label("rhs")
-        equality_comparison = SequenceTree.new([lhs, equals1, rhs], input, 0, 17)
+        char_array = CharArray.new(input)
+        t1 = TerminalTree.new(input[0..2], char_array, 0, 2).label("nums")
+        dots1  = TerminalTree.new(input[3..4], char_array, 3, 4)
+        t2 = TerminalTree.new(input[5..7], char_array, 5, 7).label("nums")
+        equals1  = TerminalTree.new(input[8..9], char_array, 8, 9)
+        t3 = TerminalTree.new(input[10..12], char_array, 10, 12).label("nums")
+        dots2  = TerminalTree.new(input[13..14], char_array, 13, 14)
+        t4 = TerminalTree.new(input[15..17], char_array, 15, 17).label("nums")
+        seq_range1 = SequenceTree.new([t1, dots1, t2] of ParseTree, char_array, 0, 7)
+        seq_range2 = SequenceTree.new([t3, dots2, t4] of ParseTree, char_array, 10, 17)
+        lhs = ApplyTree.new(seq_range1, "range", char_array, 0, 7).label("lhs")
+        rhs = ApplyTree.new(seq_range2, "range", char_array, 10, 17).label("rhs")
+        equality_comparison = SequenceTree.new([lhs, equals1, rhs], char_array, 0, 17)
 
         equality_comparison.descendants.should eq([lhs, seq_range1, t1, dots1, t2, equals1, rhs, seq_range2, t3, dots2, t4])
         equality_comparison.self_and_descendants.should eq([equality_comparison, lhs, seq_range1, t1, dots1, t2, equals1, rhs, seq_range2, t3, dots2, t4])
@@ -755,18 +756,20 @@ describe Arborist do
     describe "local_captures" do
       it "includes labels of any direct children" do
         input = "123456"
-        t1 = TerminalTree.new(input[0..2], input, 0, 2).label("first")
-        t2 = TerminalTree.new(input[3..5], input, 3, 5).label("last")
-        s1 = SequenceTree.new([t1, t2] of ParseTree, input, 0, 5)
+        char_array = CharArray.new(input)
+        t1 = TerminalTree.new(input[0..2], char_array, 0, 2).label("first")
+        t2 = TerminalTree.new(input[3..5], char_array, 3, 5).label("last")
+        s1 = SequenceTree.new([t1, t2] of ParseTree, char_array, 0, 5)
 
         s1.local_captures.should eq({"first" => [t1], "last" => [t2]})
       end
 
       it "aggregates captures with reused labels" do
         input = "123456"
-        t1 = TerminalTree.new(input[0..2], input, 0, 2).label("nums")
-        t2 = TerminalTree.new(input[3..5], input, 3, 5).label("nums")
-        s1 = SequenceTree.new([t1, t2] of ParseTree, input, 0, 5)
+        char_array = CharArray.new(input)
+        t1 = TerminalTree.new(input[0..2], char_array, 0, 2).label("nums")
+        t2 = TerminalTree.new(input[3..5], char_array, 3, 5).label("nums")
+        s1 = SequenceTree.new([t1, t2] of ParseTree, char_array, 0, 5)
 
         s1.local_captures.should eq({"nums" => [t1, t2]})
       end
@@ -775,18 +778,20 @@ describe Arborist do
     describe "captures" do
       it "includes labels of any direct children" do
         input = "123456"
-        t1 = TerminalTree.new(input[0..2], input, 0, 2).label("first")
-        t2 = TerminalTree.new(input[3..5], input, 3, 5).label("last")
-        s1 = SequenceTree.new([t1, t2] of ParseTree, input, 0, 5)
+        char_array = CharArray.new(input)
+        t1 = TerminalTree.new(input[0..2], char_array, 0, 2).label("first")
+        t2 = TerminalTree.new(input[3..5], char_array, 3, 5).label("last")
+        s1 = SequenceTree.new([t1, t2] of ParseTree, char_array, 0, 5)
 
         s1.captures.should eq({"first" => [t1], "last" => [t2]})
       end
 
       it "aggregates captures with reused labels" do
         input = "123456"
-        t1 = TerminalTree.new(input[0..2], input, 0, 2).label("nums")
-        t2 = TerminalTree.new(input[3..5], input, 3, 5).label("nums")
-        s1 = SequenceTree.new([t1, t2] of ParseTree, input, 0, 5)
+        char_array = CharArray.new(input)
+        t1 = TerminalTree.new(input[0..2], char_array, 0, 2).label("nums")
+        t2 = TerminalTree.new(input[3..5], char_array, 3, 5).label("nums")
+        s1 = SequenceTree.new([t1, t2] of ParseTree, char_array, 0, 5)
 
         s1.captures.should eq({"nums" => [t1, t2]})
       end
@@ -795,18 +800,19 @@ describe Arborist do
         # equality_comparison = lhs=range "==" rhs=range
         # range = nums:[0-9]+ ".." nums:[0-9]+
         input = "111..222==333..444"
-        t1 = TerminalTree.new(input[0..2], input, 0, 2).label("nums")
-        dots1  = TerminalTree.new(input[3..4], input, 3, 4)
-        t2 = TerminalTree.new(input[5..7], input, 5, 7).label("nums")
-        equals1  = TerminalTree.new(input[8..9], input, 8, 9)
-        t3 = TerminalTree.new(input[10..12], input, 10, 12).label("nums")
-        dots2  = TerminalTree.new(input[13..14], input, 13, 14)
-        t4 = TerminalTree.new(input[15..17], input, 15, 17).label("nums")
-        seq_range1 = SequenceTree.new([t1, dots1, t2] of ParseTree, input, 0, 7)
-        seq_range2 = SequenceTree.new([t3, dots2, t4] of ParseTree, input, 10, 17)
-        lhs = ApplyTree.new(seq_range1, "range", input, 0, 7).label("lhs")
-        rhs = ApplyTree.new(seq_range2, "range", input, 10, 17).label("rhs")
-        equality_comparison = SequenceTree.new([lhs, equals1, rhs], input, 0, 17)
+        char_array = CharArray.new(input)
+        t1 = TerminalTree.new(input[0..2], char_array, 0, 2).label("nums")
+        dots1  = TerminalTree.new(input[3..4], char_array, 3, 4)
+        t2 = TerminalTree.new(input[5..7], char_array, 5, 7).label("nums")
+        equals1  = TerminalTree.new(input[8..9], char_array, 8, 9)
+        t3 = TerminalTree.new(input[10..12], char_array, 10, 12).label("nums")
+        dots2  = TerminalTree.new(input[13..14], char_array, 13, 14)
+        t4 = TerminalTree.new(input[15..17], char_array, 15, 17).label("nums")
+        seq_range1 = SequenceTree.new([t1, dots1, t2] of ParseTree, char_array, 0, 7)
+        seq_range2 = SequenceTree.new([t3, dots2, t4] of ParseTree, char_array, 10, 17)
+        lhs = ApplyTree.new(seq_range1, "range", char_array, 0, 7).label("lhs")
+        rhs = ApplyTree.new(seq_range2, "range", char_array, 10, 17).label("rhs")
+        equality_comparison = SequenceTree.new([lhs, equals1, rhs], char_array, 0, 17)
 
         equality_comparison.captures.should eq({"lhs" => [lhs], "rhs" => [rhs]})
         seq_range1.captures.should eq({"nums" => [t1, t2]})

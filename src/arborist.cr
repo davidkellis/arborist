@@ -457,20 +457,15 @@ module Arborist
             # ---
             # fails: `(1+2)` with grammar: e -> e + e / '(' e ')' / 1 / 2     ; fails to recognize at all
 
-            # idea:
+            # candidate condition 3:
             # for any rule that is potentially left recursive, then we want to only grow a seed on the first left-recursive
             # application that arises through the application of that rule; other recursive applications should not grow a seed
-
-            # candidate condition 3:
             should_grow_seed = current_rule_application.resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
               (parent_application_of_same_rule.nil? ||
                parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application) )
-              # current_application_should_grow_seed_maximally?(parent_application_of_same_rule, current_rule_application)
 
             GlobalDebug.puts "should grow seed? #{current_rule_application.resulted_in_left_recursion?} && ( #{parent_application_of_same_rule.nil?} || #{parent_application_of_same_rule && parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application)}===(#{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.includes?(current_rule_application)} && #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.size } == 1) )"
             GlobalDebug.puts "|-> (call #{parent_application_of_same_rule.object_id}).child_recursive_calls = #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.map(&.object_id) }"
-            # GlobalDebug.puts "should grow seed? #{current_rule_application.resulted_in_left_recursion?} && #{current_application_should_grow_seed_maximally?(parent_application_of_same_rule, current_rule_application)}"
-            # matcher.should_current_rule_application_grow_seed_maximally?(current_rule_application)
 
             if should_grow_seed
               seed_parse_tree = matcher.growing[rule][pos]
@@ -530,12 +525,6 @@ module Arborist
       parent_application_of_same_rule.nil? ||
       parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application)
     end
-
-    # def simple_rule_application(matcher, current_rule_application) : ParseTree?
-    #   # this logic captures "normal" rule application - no memoization, can't handle left recursion
-    #   rule = matcher.rules[@rule_name]
-    #   rule.expr.eval(matcher)
-    # end
 
     def push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
       current_rule_application = ApplyCall.new(self, rule, pos, is_this_application_left_recursive_at_pos)

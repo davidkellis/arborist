@@ -1,4 +1,5 @@
 require "./dsl"
+require "./char_array"
 
 module Arborist
   class MemoResult
@@ -115,12 +116,11 @@ module Arborist
     include DSL
     
     @memo_tree : MemoTree
-    getter input : String
+    getter input : CharArray
     property pos : Int32
     getter rules : Hash(String, Rule)
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
     property expr_call_stack : Array(ExprCall)
-    # property fail_all_rules_until_this_rule : ApplyCall?
     property expr_failures : Hash(Int32, Set(MatchFailure))
     property seed_growth_controller : SeedGrowthController
 
@@ -130,11 +130,10 @@ module Arborist
       # these structures are necessary for handling left recursion
       @growing = {} of Rule => Hash(Int32, ParseTree?)
       @expr_call_stack = [] of ExprCall
-      # @fail_all_rules_until_this_rule = nil
       @expr_failures = {} of Int32 => Set(MatchFailure)
       @seed_growth_controller = SeedGrowthController.new
 
-      @input = ""
+      @input = CharArray.new("")
       @memo_tree = MemoTree.new
       @pos = 0
     end
@@ -157,8 +156,8 @@ module Arborist
     end
 
     # returns nil if the grammar rules don't match the full input string
-    def match(input, start_rule_name = (@rules.first_key? || "start")) : ApplyTree?
-      @input = input
+    def match(input : String, start_rule_name = (@rules.first_key? || "start")) : ApplyTree?
+      @input = CharArray.new(input)
       
       prepare_for_matching    # (re)initialize the growing map and limit set just prior to use
 
@@ -193,7 +192,6 @@ module Arborist
       end
 
       @expr_call_stack = [] of ExprCall
-      # @fail_all_rules_until_this_rule = nil
       @expr_failures = {} of Int32 => Set(MatchFailure)
       @seed_growth_controller.reset
     end
@@ -231,18 +229,6 @@ module Arborist
       nil
     end
 
-    # # returns the deepest/most-recent left-recursive application of `rule` in the rule application stack
-    # def lookup_left_recursive_rule_application(rule) : ApplyCall?
-    #   i = @expr_call_stack.size - 1
-    #   while i >= 0
-    #     expr_application_i = @expr_call_stack[i]
-    #     i -= 1
-    #     next unless expr_application_i.is_a?(ApplyCall)
-    #     return expr_application_i if expr_application_i.rule == rule && expr_application_i.left_recursive?
-    #   end
-    #   nil
-    # end
-
     # returns the leftmost/earliest/oldest/shallowest application of `rule` in the rule application stack that resulted in left recursion
     def lookup_oldest_rule_application_that_resulted_in_left_recursion(rule) : ApplyCall?
       @expr_call_stack.each do |expr_application|
@@ -251,19 +237,6 @@ module Arborist
       end
       nil
     end
-
-    # # consults the rule application stack and returns the deepest/most-recent left-recursive 
-    # # application of any rule occuring at position `pos`
-    # def lookup_deepest_left_recursive_rule_appliation(pos) : ApplyCall?
-    #   i = @expr_call_stack.size - 1
-    #   while i >= 0
-    #     expr_application_i = @expr_call_stack[i]
-    #     i -= 1
-    #     next unless expr_application_i.is_a?(ApplyCall)
-    #     return expr_application_i if expr_application_i.left_recursive? && expr_application_id.pos == pos
-    #   end
-    #   nil
-    # end
 
     def log_match_failure(pos : Int32, expr : Expr) : Nil
       match_failure = MatchFailure.new(pos, expr, apply_calls_in_call_stack)
@@ -311,25 +284,6 @@ module Arborist
           end
         end
 
-
-        # context_up_to_error = error_context[0, length_of_context_up_to_and_including_error]
-        # context_after_error = error_context[length_of_context_up_to_and_including_error..-1]
-        # lines_up_to_error = context_up_to_error.lines(false)
-        # error_line = lines_up_to_error.pop
-
-        # character_total_prior_to_error_line = lines_up_to_error.reduce(0) do |memo, line|
-        #   memo + line.each_char.size
-        # end
-        # error_position_on_line = length_of_context_up_to_and_including_error - character_total_prior_to_error_line
-
-        # lines_up_to_error.each {|line| print line }
-        # puts error_line
-        # puts "#{"-" * error_position_on_line}^"
-
-
-        # puts @input[start_pos, 40]
-        # puts "#{"-" * context_length}^"
-
         puts "Expected one of the following expressions to match on line #{error_position_line_number} char #{error_position_on_line} ; at position #{pos+1} (character index #{pos}):"
         match_failures.group_by(&.active_rule_name).each do |active_rule_name, match_failures_for_rule|
           puts active_rule_name
@@ -347,14 +301,6 @@ module Arborist
         puts "No match failures were logged."
       end
     end
-
-    # def fail_all_rules_back_to(previous_application_of_rule : ApplyCall)
-    #   @fail_all_rules_until_this_rule = previous_application_of_rule
-    # end
-
-    # def fail_all_rules?
-    #   !!@fail_all_rules_until_this_rule
-    # end
 
     def push_onto_call_stack(expr_application : ExprCall)
       @expr_call_stack.push(expr_application)
@@ -408,16 +354,6 @@ module Arborist
     def rule_in_recursion_call_stack_state : Array({Int32, String})
       apply_calls_that_resulted_in_left_recursion.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
     end
-
-    # def should_current_rule_application_grow_seed_maximally?(current_rule_application)
-    #   # either (1) no ancestor rule application of the same rule resulted in left recursion
-    #   #     OR (2) the deepest ancestor rule application of the same rule resulted in left recursion and 
-    # end
-
-    # def any_left_recursion_ongoing? : Bool
-    #   apply_calls = @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) }.map(&.as(ApplyCall))
-    #   apply_calls.any?(&.left_recursive?)
-    # end
 
     def eof?
       @pos >= @input.size
