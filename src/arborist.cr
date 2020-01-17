@@ -53,9 +53,19 @@ module Arborist
     def self.reset_indent
       @@indent = -1
     end
-    def self.puts(str)
-      STDOUT.puts("#{prefix("|  ")}#{str}") if enabled?
+
+    # Changing this logging from a function to a macro made a 10x performance improvement.
+    # To see the change in the test suite, you may run tests like: `NOLOG=true crystal spec`
+    # To see the change in the compiled binary, you may compile like: `NOLOG=true ./build.sh`
+    # Without the NOLOG=true environment variable, GlobalDebug.puts behaves like normal, as if it were defined as a function.
+    macro puts(str)
+      {% if !env("NOLOG") %}
+      STDOUT.puts("#{GlobalDebug.prefix("|  ")}#{ {{str}} }") if GlobalDebug.enabled?
+      {% end %}
     end
+    # def self.puts(str)
+    #   STDOUT.puts("#{prefix("|  ")}#{str}") if enabled?
+    # end
   end
 
   class Rule
