@@ -1,5 +1,6 @@
 require "./dsl"
 require "./char_array"
+require "./expression_call_stack"
 
 module Arborist
   class MemoResult
@@ -10,36 +11,43 @@ module Arborist
     end
   end
 
-  # Column is a Map from rule_name => memoized-parse-tree-with-next-pos-state
-  alias Column = Hash(String, MemoResult)
+  # RuleNameToMemoResult is a Map from rule_name => memoized-parse-tree-with-next-pos-state
+  alias RuleNameToMemoResult = Hash(String, MemoResult)
 
   class MemoTree
     # stores the memoized parse trees that occur in the rule-in-recursion call stack state represented by this MemoTree node
-    property memo_table : Hash(Int32, Column)
+    property memo_table : Hash(Int32, RuleNameToMemoResult)
 
     # stores memoization tables for ApplyCalls that occur in a more specific rule-in-recursion call stack state than is represented by this MemoTree node
     # The tuple representing the key is of the form: {pos, rule_name}
     property children : Hash({Int32, String}, MemoTree)
 
-    def initialize()
-      @memo_table = {} of Int32 => Column
-      @children = {} of {Int32, String} => MemoTree
-    end
+    property call_stack_to_memo_tree : Hash( Array({Int32, String}), MemoTree )
 
-    def clone()
+    def self.new_with_same_memo_table(other_memo_tree)
       mt = MemoTree.new
-      self.memo_table.each do |pos, col|
-        mt.memo_table[pos] = col.dup    # shallow copy of Column
+      other_memo_tree.memo_table.each do |pos, col|
+        mt.memo_table[pos] = col.dup    # shallow copy of RuleNameToMemoResult
       end
       mt
     end
 
-    def exist?(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : Bool
-      tree_node : MemoTree = self
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        tree_node = tree_node.children[pos_rule_name_pair]? || (return false)
-      end
+    def initialize()
+      @memo_table = {} of Int32 => RuleNameToMemoResult
+      @children = {} of {Int32, String} => MemoTree
+      @call_stack_to_memo_tree = {} of Array({Int32, String}) => MemoTree
+      @call_stack_to_memo_tree[Array({Int32, String}).new] = self
+    end
 
+    def exist?(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : Bool
+      # tree_node : MemoTree = self
+      # rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+      #   tree_node = tree_node.children[pos_rule_name_pair]? || (return false)
+      # end
+
+      # tree_node.local_exist?(pos, rule_name)
+      
+      tree_node = @call_stack_to_memo_tree[rule_in_recursion_call_stack_state]? || (return false)
       tree_node.local_exist?(pos, rule_name)
     end
 
@@ -49,10 +57,15 @@ module Arborist
     end
 
     def lookup(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String) : MemoResult?
-      tree_node : MemoTree = self
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        tree_node = tree_node.children[pos_rule_name_pair]? || (return nil)
-      end
+      # tree_node : MemoTree = self
+      # rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+      #   tree_node = tree_node.children[pos_rule_name_pair]? || (return nil)
+      # end
+      # memo_table = tree_node.memo_table
+      # col = memo_table[pos]?
+      # col[rule_name]? if col
+
+      tree_node : MemoTree = @call_stack_to_memo_tree[rule_in_recursion_call_stack_state]? || (return nil)
       memo_table = tree_node.memo_table
       col = memo_table[pos]?
       col[rule_name]? if col
@@ -66,27 +79,29 @@ module Arborist
     def add(rule_in_recursion_call_stack_state : Array({Int32, String}), pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
       tree_node = self
       rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        tree_node = (tree_node.children[pos_rule_name_pair] ||= tree_node.clone)
+        tree_node = (tree_node.children[pos_rule_name_pair] ||= MemoTree.new_with_same_memo_table(tree_node))
       end
+
+      @call_stack_to_memo_tree[rule_in_recursion_call_stack_state] = tree_node
 
       tree_node.local_memoize(pos, rule_name, memo_result)
     end
 
     def local_memoize(pos : Int32, rule_name : String, memo_result : MemoResult) : MemoResult
       memo_table = self.memo_table
-      col = (memo_table[pos] ||= Column.new)
+      col = (memo_table[pos] ||= RuleNameToMemoResult.new)
       col[rule_name] = memo_result
     end
 
-    private def lookup_tree_node(rule_in_recursion_call_stack_state : Array({Int32, String})) : MemoTree?
-      tree_node = self
-      rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
-        child = tree_node.children[pos_rule_name_pair]?
-        return nil unless child
-        tree_node = child
-      end
-      tree_node
-    end
+    # private def lookup_tree_node(rule_in_recursion_call_stack_state : Array({Int32, String})) : MemoTree?
+    #   tree_node = self
+    #   rule_in_recursion_call_stack_state.each do |pos_rule_name_pair|
+    #     child = tree_node.children[pos_rule_name_pair]?
+    #     return nil unless child
+    #     tree_node = child
+    #   end
+    #   tree_node
+    # end
   end
 
 
@@ -120,7 +135,7 @@ module Arborist
     property pos : Int32
     getter rules : Hash(String, Rule)
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
-    property expr_call_stack : Array(ExprCall)
+    property expr_call_stack : ExpressionCallStack
     property expr_failures : Hash(Int32, Set(MatchFailure))
     property seed_growth_controller : SeedGrowthController
 
@@ -129,7 +144,8 @@ module Arborist
 
       # these structures are necessary for handling left recursion
       @growing = {} of Rule => Hash(Int32, ParseTree?)
-      @expr_call_stack = [] of ExprCall
+      # @expr_call_stack = [] of ExprCall
+      @expr_call_stack = ExpressionCallStack.new
       @expr_failures = {} of Int32 => Set(MatchFailure)
       @seed_growth_controller = SeedGrowthController.new
 
@@ -178,7 +194,6 @@ module Arborist
     # So, we want to initialize the growing map just prior to using it, since that will be the only point that we know for sure that
     # all of the rules have been added to the matcher.
     def prepare_for_matching
-      # @memoTable = {} of Int32 => Column
       @memo_tree = MemoTree.new
 
       @pos = 0
@@ -191,7 +206,8 @@ module Arborist
         initialize_seed_growing_hash_for_rule(rule)
       end
 
-      @expr_call_stack = [] of ExprCall
+      # @expr_call_stack = [] of ExprCall
+      @expr_call_stack.reset
       @expr_failures = {} of Int32 => Set(MatchFailure)
       @seed_growth_controller.reset
     end
@@ -207,35 +223,38 @@ module Arborist
 
     # returns the deepest/most-recent application of `rule` at position `pos` in the rule application stack
     def lookup_rule_application_in_call_stack(rule, pos) : ApplyCall?
-      i = @expr_call_stack.size - 1
-      while i >= 0
-        expr_application_i = @expr_call_stack[i]
-        i -= 1
-        next unless expr_application_i.is_a?(ApplyCall)
-        return expr_application_i if expr_application_i.rule == rule && expr_application_i.pos == pos
-      end
-      nil
+      # i = @expr_call_stack.size - 1
+      # while i >= 0
+      #   expr_application_i = @expr_call_stack[i]
+      #   i -= 1
+      #   next unless expr_application_i.is_a?(ApplyCall)
+      #   return expr_application_i if expr_application_i.rule == rule && expr_application_i.pos == pos
+      # end
+      # nil
+      @expr_call_stack.lookup_rule_application_in_call_stack(rule, pos)
     end
 
     # returns the deepest/most-recent application of `rule` in the rule application stack
     def lookup_most_recent_rule_application_in_call_stack(rule) : ApplyCall?
-      i = @expr_call_stack.size - 1
-      while i >= 0
-        expr_application_i = @expr_call_stack[i]
-        i -= 1
-        next unless expr_application_i.is_a?(ApplyCall)
-        return expr_application_i if expr_application_i.rule == rule
-      end
-      nil
+      # i = @expr_call_stack.size - 1
+      # while i >= 0
+      #   expr_application_i = @expr_call_stack[i]
+      #   i -= 1
+      #   next unless expr_application_i.is_a?(ApplyCall)
+      #   return expr_application_i if expr_application_i.rule == rule
+      # end
+      # nil
+      @expr_call_stack.lookup_most_recent_rule_application_in_call_stack(rule)
     end
 
     # returns the leftmost/earliest/oldest/shallowest application of `rule` in the rule application stack that resulted in left recursion
     def lookup_oldest_rule_application_that_resulted_in_left_recursion(rule) : ApplyCall?
-      @expr_call_stack.each do |expr_application|
-        next unless expr_application.is_a?(ApplyCall)
-        return expr_application if expr_application.rule == rule && expr_application.resulted_in_left_recursion?
-      end
-      nil
+      # @expr_call_stack.each do |expr_application|
+      #   next unless expr_application.is_a?(ApplyCall)
+      #   return expr_application if expr_application.rule == rule && expr_application.resulted_in_left_recursion?
+      # end
+      # nil
+      @expr_call_stack.lookup_oldest_rule_application_that_resulted_in_left_recursion(rule)
     end
 
     def log_match_failure(pos : Int32, expr : Expr) : Nil
@@ -303,7 +322,8 @@ module Arborist
     end
 
     def push_onto_call_stack(expr_application : ExprCall)
-      @expr_call_stack.push(expr_application)
+      # @expr_call_stack.push(expr_application)
+      @expr_call_stack.push_onto_call_stack(expr_application)
       seed_growth_controller.push_onto_call_stack(expr_application)
       expr_application
     end
@@ -311,7 +331,8 @@ module Arborist
     def pop_off_of_call_stack(the_top_of_stack_expr_call_successfully_parsed : Bool) : ExprCall
       seed_growth_controller.current_expr_call_failed unless the_top_of_stack_expr_call_successfully_parsed
       seed_growth_controller.pop_off_of_call_stack()
-      @expr_call_stack.pop
+      # @expr_call_stack.pop
+      @expr_call_stack.pop_off_of_call_stack(the_top_of_stack_expr_call_successfully_parsed)
     end
 
     def has_memoized_result?(rule_name) : Bool
@@ -339,20 +360,24 @@ module Arborist
     end
 
     def left_recursive_apply_calls : Array(ApplyCall)
-      @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.left_recursive? }.map(&.as(ApplyCall))
+      # @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.left_recursive? }.map(&.as(ApplyCall))
+      @expr_call_stack.left_recursive_apply_calls
     end
 
     def apply_calls_that_resulted_in_left_recursion : Array(ApplyCall)
-      @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.resulted_in_left_recursion? }.map(&.as(ApplyCall))
+      # @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) && expr_call.resulted_in_left_recursion? }.map(&.as(ApplyCall))
+      @expr_call_stack.apply_calls_that_resulted_in_left_recursion
     end
 
     def apply_calls_in_call_stack : Array(ApplyCall)
-      @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) }.map(&.as(ApplyCall))
+      # @expr_call_stack.select {|expr_call| expr_call.is_a?(ApplyCall) }.map(&.as(ApplyCall))
+      @expr_call_stack.apply_calls_in_call_stack
     end
 
     # returns an array of pairs of the form {pos, rule_name}, each summarizing an ApplyCall
     def rule_in_recursion_call_stack_state : Array({Int32, String})
-      apply_calls_that_resulted_in_left_recursion.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
+      # apply_calls_that_resulted_in_left_recursion.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
+      @expr_call_stack.rule_in_recursion_call_stack_state
     end
 
     def eof?
@@ -414,14 +439,15 @@ module Arborist
     end
 
     def most_recent_rule_application : ApplyCall?
-      i = @expr_call_stack.size - 1
-      while i >= 0
-        expr_application_i = @expr_call_stack[i]
-        i -= 1
-        next unless expr_application_i.is_a?(ApplyCall)
-        return expr_application_i
-      end
-      nil
+      # i = @expr_call_stack.size - 1
+      # while i >= 0
+      #   expr_application_i = @expr_call_stack[i]
+      #   i -= 1
+      #   next unless expr_application_i.is_a?(ApplyCall)
+      #   return expr_application_i
+      # end
+      # nil
+      @expr_call_stack.most_recent_rule_application
     end
   end
 end

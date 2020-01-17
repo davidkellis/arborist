@@ -30,14 +30,14 @@ Alternatively, just run `./build.sh`, which does the same thing as above.
 
 ## Run Specs
 ```bash
-$ crystal spec
-..........................*.....................
+~/Dropbox/projects/arborist master *1 !1 ?2 ❯ crystal spec
+...........................*.......................
 
 Pending:
   Arborist left-recursion support never matches any phrase for the rule: a = !a 'b' ; see https://github.com/harc/ohm/issues/120
 
-Finished in 3.22 seconds
-48 examples, 0 failures, 0 errors, 1 pending
+Finished in 3.29 seconds
+51 examples, 0 failures, 0 errors, 1 pending
 ```
 
 
@@ -53,6 +53,10 @@ Following the instructions captured in http://www.mikeperham.com/2016/06/24/prof
 3. Do the following:
    ```bash
    $ instruments -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist
+   # OR
+   # $ instruments -l 30000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 30 seconds of profiling
+   # $ instruments -l 120000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 2 mins of profiling
+   # $ instruments -l 300000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 5 mins of profiling
    Instruments Trace Complete: ~/projects/arborist/instrumentscli0.trace
    $ open instrumentscli0.trace
    # Examine the trace from within the Instruments tool
