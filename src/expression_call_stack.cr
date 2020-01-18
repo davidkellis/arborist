@@ -84,8 +84,8 @@ module Arborist
     end
 
     def pop_off_of_call_stack(the_top_of_stack_expr_call_successfully_parsed : Bool) : ExprCall
-      # seed_growth_controller.current_expr_call_failed unless the_top_of_stack_expr_call_successfully_parsed
-      # seed_growth_controller.pop_off_of_call_stack()
+      # expr_call_tree_controller.current_expr_call_failed unless the_top_of_stack_expr_call_successfully_parsed
+      # expr_call_tree_controller.pop_off_of_call_stack()
       popped_expr_call = @call_stack.pop
       if popped_expr_call.is_a?(ApplyCall)
         @apply_call_stack.pop
@@ -106,7 +106,7 @@ module Arborist
         apply_call_stack_for_rule_and_pos = (@apply_calls_per_rule_and_pos[{expr_call.rule, expr_call.pos}] ||= [] of ApplyCall)
         apply_call_stack_for_rule_and_pos.push(expr_call)
       end
-      # seed_growth_controller.push_onto_call_stack(expr_call)
+      # expr_call_tree_controller.push_onto_call_stack(expr_call)
       expr_call
     end
 

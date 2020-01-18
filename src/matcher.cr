@@ -36,7 +36,7 @@ module Arborist
     property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
     property expr_call_stack : ExpressionCallStack
     property expr_failures : Hash(Int32, Set(MatchFailure))
-    property seed_growth_controller : SeedGrowthController
+    property expr_call_tree_controller : ExprCallTreeController
 
     def initialize(rules = {} of String => Rule)
       @rules = rules
@@ -46,7 +46,7 @@ module Arborist
       # @expr_call_stack = [] of ExprCall
       @expr_call_stack = ExpressionCallStack.new
       @expr_failures = {} of Int32 => Set(MatchFailure)
-      @seed_growth_controller = SeedGrowthController.new
+      @expr_call_tree_controller = ExprCallTreeController.new
 
       @input = CharArray.new("")
       @memo_tree = MemoTree.new
@@ -108,7 +108,7 @@ module Arborist
       # @expr_call_stack = [] of ExprCall
       @expr_call_stack.reset
       @expr_failures = {} of Int32 => Set(MatchFailure)
-      @seed_growth_controller.reset
+      @expr_call_tree_controller.reset
     end
 
     def initialize_seed_growing_hash_for_rule(rule)
@@ -223,13 +223,13 @@ module Arborist
     def push_onto_call_stack(expr_application : ExprCall)
       # @expr_call_stack.push(expr_application)
       @expr_call_stack.push_onto_call_stack(expr_application)
-      seed_growth_controller.push_onto_call_stack(expr_application)
+      expr_call_tree_controller.push_onto_call_stack(expr_application)
       expr_application
     end
 
     def pop_off_of_call_stack(the_top_of_stack_expr_call_successfully_parsed : Bool) : ExprCall
-      seed_growth_controller.current_expr_call_failed unless the_top_of_stack_expr_call_successfully_parsed
-      seed_growth_controller.pop_off_of_call_stack()
+      expr_call_tree_controller.current_expr_call_failed unless the_top_of_stack_expr_call_successfully_parsed
+      expr_call_tree_controller.pop_off_of_call_stack()
       # @expr_call_stack.pop
       @expr_call_stack.pop_off_of_call_stack(the_top_of_stack_expr_call_successfully_parsed)
     end

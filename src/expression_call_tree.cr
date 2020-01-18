@@ -37,7 +37,7 @@ module Arborist
     end
   end
 
-  class SeedGrowthController
+  class ExprCallTreeController
     property root : ExprCallTree?
     property current_node : ExprCallTree?
 
