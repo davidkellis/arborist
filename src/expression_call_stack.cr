@@ -111,8 +111,8 @@ module Arborist
     end
 
     # returns an array of pairs of the form {pos, rule_name}, each summarizing an ApplyCall
-    def rule_in_recursion_call_stack_state : Array({Int32, String})
-      apply_calls_that_resulted_in_left_recursion.map {|apply_call| {apply_call.pos, apply_call.rule_name} }
+    def rule_in_recursion_call_stack_state : Array({Int32, Rule})
+      apply_calls_that_resulted_in_left_recursion.map {|apply_call| {apply_call.pos, apply_call.rule} }
     end
 
   end
