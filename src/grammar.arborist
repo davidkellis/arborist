@@ -45,14 +45,6 @@ Arborist {
     <- ident "=" Base           -- label
     / Base                      -- base
 
-//  Lex
-//    <- "#" Base  -- lex
-//    / Base
-
-//  MutexAlt
-//    <- Base ("|" Base)+             -- alts
-//    / Base                          -- base
-
   Base
     <- MutexAlt                     -- mutexAlt
     / ident !"<-" !"="              -- application

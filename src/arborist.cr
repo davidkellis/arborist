@@ -281,7 +281,7 @@ module Arborist
         # was created with a label that is associated with a different invocation/application of the Rule identified by @rule_name than the 
         # invocation/application that this Apply object represents.
         memoized_apply_tree.set_label(@label) if memoized_apply_tree
-        GlobalDebug.puts "found memoized apply #{@rule_name} at #{pos} : #{memoized_apply_tree && memoized_apply_tree.as(ApplyTree).syntax_tree || "nil"}"
+        GlobalDebug.puts "found memoized apply #{@rule_name} at #{pos} : #{memoized_apply_tree && memoized_apply_tree.as(ApplyTree).simple_s_exp || "nil"}"
         memoized_apply_tree
       else
         # has this same rule been applied at the same position previously?
@@ -324,7 +324,7 @@ module Arborist
           else
             matcher.pos = pos
           end
-          GlobalDebug.puts "return seed growth for #{@rule_name} at #{pos} : '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
+          GlobalDebug.puts "return seed growth for #{@rule_name} at #{pos} : '#{seed_parse_tree.try(&.simple_s_exp) || "nil"}'"
           seed_parse_tree
         else
           # This branch is all about growing the seed from the bottom up with Warth-style bottom-up seed-growing
@@ -399,12 +399,12 @@ module Arborist
               (parent_application_of_same_rule.nil? ||
                parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application) )
 
-            GlobalDebug.puts "should grow seed? #{current_rule_application.resulted_in_left_recursion?} && ( #{parent_application_of_same_rule.nil?} || #{parent_application_of_same_rule && parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application)}===(#{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.includes?(current_rule_application)} && #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.size } == 1) )"
+            GlobalDebug.puts "should grow seed? (#{should_grow_seed}) #{current_rule_application.resulted_in_left_recursion?} && ( #{parent_application_of_same_rule.nil?} || #{parent_application_of_same_rule && parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application)}===(#{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.includes?(current_rule_application)} && #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.size } == 1) )"
             GlobalDebug.puts "|-> (call #{parent_application_of_same_rule.object_id}).child_recursive_calls = #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.map(&.object_id) }"
 
             if should_grow_seed
               seed_parse_tree = matcher.growing[rule][pos]
-              GlobalDebug.puts "candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.syntax_tree) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.syntax_tree) || "nil"}'"
+              GlobalDebug.puts "candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.simple_s_exp) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.simple_s_exp) || "nil"}'"
               if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # we're done growing the seed; it can't grow any further
                 GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos}"
                 full_grown_seed_to_return = seed_parse_tree
@@ -420,12 +420,12 @@ module Arborist
               break
             end
 
-            GlobalDebug.puts "grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.syntax_tree) || "nil"}'"
+            GlobalDebug.puts "grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.simple_s_exp) || "nil"}'"
             matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
           end
 
           matcher.growing[rule].delete(pos)
-          GlobalDebug.puts "finishing seed growth for rule #{rule.name} at #{pos} : '#{full_grown_seed_to_return.try(&.syntax_tree) || "nil"}'"
+          GlobalDebug.puts "finishing seed growth for rule #{rule.name} at #{pos} : '#{full_grown_seed_to_return.try(&.simple_s_exp) || "nil"}'"
           full_grown_seed_to_return
         end                                                                 # line 35 of Algorithm 2
 
@@ -436,7 +436,7 @@ module Arborist
         end
 
         if apply_parse_tree
-          GlobalDebug.puts "matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} : '#{apply_parse_tree.syntax_tree}'"
+          GlobalDebug.puts "matched #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos} : '#{apply_parse_tree.simple_s_exp}'"
         else
           GlobalDebug.puts "failed #{@rule_name} (call #{popped_apply_call.object_id}) at #{pos}"
         end
@@ -672,7 +672,7 @@ module Arborist
         parse_tree = expr.eval(matcher)
         if parse_tree
           matcher.pop_off_of_call_stack(true)
-          GlobalDebug.puts "matched choice(#{expr.to_s}) => #{parse_tree.syntax_tree} at #{orig_pos}"
+          GlobalDebug.puts "matched choice(#{expr.to_s}) => #{parse_tree.simple_s_exp} at #{orig_pos}"
           return ChoiceTree.new(parse_tree, matcher.input, orig_pos, parse_tree.finishing_pos).label(@label)
         end
       end
@@ -731,7 +731,7 @@ module Arborist
 
       matcher.pop_off_of_call_stack(true)
       parse_tree = SequenceTree.new(ans, matcher.input, start_pos, matcher.pos - 1).label(@label)
-      GlobalDebug.puts "matched #{to_s} => #{parse_tree.syntax_tree} at #{start_pos}"
+      GlobalDebug.puts "matched #{to_s} => #{parse_tree.simple_s_exp} at #{start_pos}"
       parse_tree
     end
 
@@ -850,6 +850,17 @@ module Arborist
         matcher.pos = orig_pos
       end
 
+      # todo: revisit this, I don't think I need to check for eof, like I do with the Repetition and RepetitionOnePlus classes
+      # if !matcher.eof?
+      #   orig_pos = matcher.pos
+      #   tmp_parse_tree = @exp.eval(matcher)
+      #   if tmp_parse_tree
+      #     parse_tree = tmp_parse_tree unless tmp_parse_tree.is_a?(NegLookAheadTree) || tmp_parse_tree.is_a?(PosLookAheadTree)
+      #   else
+      #     matcher.pos = orig_pos
+      #   end
+      # end
+
       matcher.pop_off_of_call_stack(true)
 
       OptionalTree.new(parse_tree, matcher.input, orig_pos, matcher.pos - 1).label(@label)
@@ -890,16 +901,31 @@ module Arborist
       ans = [] of ParseTree
       term_count = 0
       loop do
-        orig_pos = matcher.pos
-        matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
-        parse_tree = @exp.eval(matcher)
-        if parse_tree
-          ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
-        else
-          matcher.pos = orig_pos
+        if matcher.eof?
           break
+        else
+          orig_pos = matcher.pos
+          matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
+          parse_tree = @exp.eval(matcher)
+          if parse_tree
+            # ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
+
+            if !(@exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead))
+              ans.push(parse_tree)
+
+              if matcher.pos == orig_pos
+                # todo: what do we do in this case? we are repeating on an expression that will repeat infinitely, because it is matching, yet not consuming any characters
+                # for now, I'm deciding that the proper course of action is to add the first match to the list of matching parse trees, and then break out, because the same
+                # rule will match infinitely many times in any subsequent evaluations
+                break
+              end
+            end
+          else
+            matcher.pos = orig_pos
+            break
+          end
+          term_count += 1
         end
-        term_count += 1
       end
 
       matcher.pop_off_of_call_stack(true)
@@ -940,16 +966,30 @@ module Arborist
       start_pos = matcher.pos
       term_count = 0
       loop do
-        orig_pos = matcher.pos
-        matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
-        parse_tree = @exp.eval(matcher)
-        if parse_tree
-          ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
-        else
-          matcher.pos = orig_pos
+        if matcher.eof?
           break
+        else
+          orig_pos = matcher.pos
+          matcher.skip_whitespace_if_in_syntactic_context(@exp) if term_count > 0
+          parse_tree = @exp.eval(matcher)
+          if parse_tree
+            # ans.push(parse_tree) unless @exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead)
+            if !(@exp.is_a?(NegLookAhead) || @exp.is_a?(PosLookAhead))
+              ans.push(parse_tree)
+
+              if matcher.pos == orig_pos
+                # todo: what do we do in this case? we are repeating on an expression that will repeat infinitely, because it is matching, yet not consuming any characters
+                # for now, I'm deciding that the proper course of action is to add the first match to the list of matching parse trees, and then break out, because the same
+                # rule will match infinitely many times in any subsequent evaluations
+                break
+              end
+            end
+          else
+            matcher.pos = orig_pos
+            break
+          end
+          term_count += 1
         end
-        term_count += 1
       end
 
       successful_parse = ans.size >= 1

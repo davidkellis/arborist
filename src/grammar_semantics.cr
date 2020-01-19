@@ -259,7 +259,7 @@ module Arborist
         end
       end
 
-      # returns a Matcher that knows how to parse
+      # returns a Matcher that knows how to parse the grammar represented by parse_tree
       # parse_tree is a ParseTree produced by Arborist::Grammar::Rules::GrammarParser
       def build_parser_for_grammar(parse_tree) : Matcher
         matcher = Matcher.new

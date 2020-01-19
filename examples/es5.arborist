@@ -414,7 +414,7 @@ ES5 {
     / SwitchStatement
     / throwStatement
     / TryStatement
-    / DebuggerStatement
+    / debuggerStatement
 
   Block <- "{" StatementList "}"
 
@@ -481,7 +481,9 @@ ES5 {
 
   Finally <- finally Block
 
-  DebuggerStatement <- #(debugger sc)
+  debuggerStatement <- debugger sc
+  # debuggerStatement <- ""   #foo
+  # debuggerStatement <- #foo
 
   # §A.5 Functions and Programs -- https://es5.github.io/#A.5
 
