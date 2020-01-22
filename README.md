@@ -344,3 +344,31 @@ is incorrect in at least one key place, with the implication being that it's eff
 Therefore, I have attempted to generalize Tratt's approach such that it can handle direct and indirect left and right 
 recursion. I believe my implementation does that. If you run into any unexpected behavior, please open an issue in Github 
 and I will try to either clarify things or fix anything that's broken.
+
+
+## Todo
+
+- make sure grammar rules *must* have some kind of body; they can't be blank; currently the parser builder can be tricked into allowing a blank rule if the rule "body" is a comment, e.g. MyRule <-   # some comment goes here
+- implement some kind of non-terminating evaluation logic to identify when a grammar evaluation will never terminate, and report on the termination failure
+  - make sure we don't end up in in an infinite loop via a Repetition or RepetitionOnePlus operator, as in the following:
+```
+|  finishing seed growth for rule SourceElement at 2 : '(Statement (DebuggerStatement ))'
+|  matched SourceElement (call 5021071072) at 2 : '(SourceElement (Statement (DebuggerStatement )))'
+|  memoizing SourceElement at 2-2 with rule_in_recursion_call_stack_state=[] : '(SourceElement (Statement (DebuggerStatement )))'
+|  try apply __skip_prior_to_expr_4748386368 at 2
+|  found memoized apply __skip_prior_to_expr_4748386368 at 2 : (__skip_prior_to_expr_4748386368 )
+|  try apply SourceElement at 2
+|  found memoized apply SourceElement at 2 : (SourceElement (Statement (DebuggerStatement )))
+|  try apply __skip_prior_to_expr_4748386368 at 2
+|  found memoized apply __skip_prior_to_expr_4748386368 at 2 : (__skip_prior_to_expr_4748386368 )
+|  try apply SourceElement at 2
+|  found memoized apply SourceElement at 2 : (SourceElement (Statement (DebuggerStatement )))
+|  try apply __skip_prior_to_expr_4748386368 at 2
+|  found memoized apply __skip_prior_to_expr_4748386368 at 2 : (__skip_prior_to_expr_4748386368 )
+|  try apply SourceElement at 2
+|  found memoized apply SourceElement at 2 : (SourceElement (Statement (DebuggerStatement )))
+|  try apply __skip_prior_to_expr_4748386368 at 2
+|  found memoized apply __skip_prior_to_expr_4748386368 at 2 : (__skip_prior_to_expr_4748386368 )
+|  try apply SourceElement at 2
+|  found memoized apply SourceElement at 2 : (SourceElement (Statement (DebuggerStatement )))
+```

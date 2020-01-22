@@ -48,6 +48,23 @@ module Arborist
       child_tree
     end
 
+    def delete_child(child_tree : ExprCallTree)
+      @children.delete(child_tree)
+    end
+
+    def prune_tree!
+      sever_from_parent!
+      # self_and_descendants.each(&.sever_from_parent!)
+    end
+
+    def sever_from_parent!
+      if parent = @parent
+        parent.delete_child(self)
+        @parent = nil
+      end
+    end
+
+    # This method returns a list of nodes in order of a postorder traversal of nodes in the tree rooted at <self>
     def self_and_descendants
       nodes = [] of ExprCallTree
       postorder_traverse do |expr_call_tree|
@@ -190,8 +207,10 @@ module Arborist
           @apply_calls_per_rule_and_pos[{popped_expr_call.rule, popped_expr_call.pos}].pop()
         end
 
+        # maintain call tree structures
         @current_node = top_node.parent
         @current_apply_node = top_node.parent_apply_node
+        top_node.prune_tree!
         reset unless @current_node
       end
 
@@ -205,8 +224,9 @@ module Arborist
       # it was added as a child of, and then the ExprCall that was added as a child will know both the parent and child
       # nodes in which the child needs to be removed from the parent's child_recursive_call set.
       if current_node = @current_node
-        expr_calls_that_descend_from_current_failed_expr_call_tree = current_node.self_and_descendants.map(&.expr_call)
-        expr_calls_that_descend_from_current_failed_expr_call_tree.each do |expr_call|
+        expr_call_nodes_that_descend_from_current_failed_expr_call_tree = current_node.self_and_descendants   # is is critical that expr_call_nodes_that_descend_from_current_failed_expr_call_tree lists the nodes in the order that would be determinend by a postorder traversal of the tree
+        expr_call_nodes_that_descend_from_current_failed_expr_call_tree.each do |expr_call_node|
+          expr_call = expr_call_node.expr_call
           expr_call.remove_self_from_parent_recursive_call if expr_call.is_a?(ApplyCall)
         end
       end
