@@ -53,7 +53,7 @@ def main
   OptionParser.parse do |parser|
     parser.banner = "Usage: arborist -g grammar_file.g file_to_parse.ext"
     parser.on("-d", "Enable debug mode.") { Config.debug = true }
-    parser.on("-m mode", "Specify parsing mode: ohm (default), python, simple.\n    ohm mode enables syntactic rule semantics (i.e. rules that start with a capital letter automatically skip whitespace between expression terms).\n    python mode enables indent/dedent rule semantics in which indent/dedent is treated as lexical delimiters\n    simple mode disables ohm mode and python mode\n    (default is ohm mode)") {|mode|
+    parser.on("-m mode", "Specify parsing mode: ohm (default), python, simple.\n\t\t\t\t\tohm mode enables syntactic rule semantics (i.e. rules that start with a capital letter automatically skip whitespace between expression terms).\n\t\t\t\t\tpython mode enables indent/dedent rule semantics in which indent/dedent is treated as lexical delimiters\n\t\t\t\t\tsimple mode disables ohm mode and python mode\n\t\t\t\t\t(default is ohm mode)") {|mode|
       modes = {"ohm" => :ohm, "python" => :python, "simple" => :simple}
       if mode_symbol = modes[mode]?
         Config.parsing_mode = mode_symbol
