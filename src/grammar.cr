@@ -47,14 +47,16 @@ module Arborist
       end
     end
 
-    def parse_file(path : String)
+    def parse_file(path : String, mode : Symbol = :ohm)
       file_contents = File.read(path)
-      parse(file_contents)
+      parse(file_contents, mode)
     end
 
-    def parse(input_str : String) : ParseTree?
+    def parse(input_str : String, mode : Symbol = :ohm) : ParseTree?
       matcher = @matcher
       raise "No grammar definition has been loaded. Please load a grammar definition before trying to parse." unless matcher
+
+      matcher.set_mode(mode)
       
       matcher.match(input_str)
     end

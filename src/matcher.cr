@@ -29,7 +29,7 @@ module Arborist
   class Matcher
     include DSL
     
-    # @memo_tree : MemoTree
+    property mode : Symbol       # :ohm, :python, :simple
     getter input : CharArray
     property pos : Int32
     getter rules : Hash(String, Rule)
@@ -38,6 +38,7 @@ module Arborist
     property expr_call_tree_controller : ExprCallTreeController
 
     def initialize(rules = {} of String => Rule)
+      @mode = :ohm
       @rules = rules
 
       # these structures are necessary for handling left recursion
@@ -48,6 +49,37 @@ module Arborist
       @input = CharArray.new("")
       # @memo_tree = MemoTree.new
       @pos = 0
+    end
+
+    def set_mode(desired_mode)
+      modes = [:ohm, :python, :simple]
+      if modes.includes?(desired_mode)
+        @mode = desired_mode
+      else
+        raise "ERROR: Mode #{mode} is not a valid mode specifier. The mode must be one of the following three options: ohm, python, simple"
+      end
+    end
+
+    # if we're operating in Ohm mode, then the syntactic rule semantics apply. See https://github.com/harc/ohm/blob/master/doc/syntax-reference.md#syntactic-lexical for more information.
+    # From https://github.com/harc/ohm/blob/master/doc/syntax-reference.md#syntactic-lexical:
+    #
+    # Syntactic vs. Lexical Rules
+    #
+    # A syntactic rule is a rule whose name begins with an uppercase letter, and lexical rule is one whose name begins with a lowercase letter.
+    # The difference between lexical and syntactic rules is that syntactic rules implicitly skip whitespace characters.
+    #
+    # For the purposes of a syntactic rule, a "whitespace character" is anything that matches its enclosing grammar's "space" rule.
+    # The default implementation of "space" matches ' ', '\t', '\n', '\r', and any other character that is considered whitespace in the ES5 spec.
+    def ohm_mode?
+      @mode == :ohm
+    end
+
+    def python_mode?
+      @mode == :python
+    end
+
+    def simple_mode?
+      @mode == :simple
     end
     
     # def call_stack_apply_calls
@@ -314,6 +346,7 @@ module Arborist
     end
 
     def skip_whitespace_if_in_syntactic_context(expr : Expr)
+      return unless ohm_mode?
       rule_application = most_recent_rule_application
       apply_skip_rule(expr) if rule_application && rule_application.syntactic_rule?
     end

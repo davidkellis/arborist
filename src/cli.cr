@@ -3,14 +3,14 @@ require "option_parser"
 require "./grammar"
 require "./parse_tree"
 
-def run(grammar_file_path, input_file_path, print_mode, print_timings)
+def run(grammar_file_path, input_file_path, print_mode, print_timings, parsing_mode)
   # puts "loading grammar:"
   t1 = Time.local
   grammar = Arborist::Grammar.new(grammar_file_path)
   t2 = Time.local
   # puts "parsing input file:"
   Arborist::GlobalDebug.enable! if Config.debug
-  parse_tree = grammar.parse_file(input_file_path)
+  parse_tree = grammar.parse_file(input_file_path, parsing_mode)
   t3 = Time.local
   if print_timings
     puts "timings: load grammar = #{t2 - t1} ; parse = #{t3 - t2}"
@@ -39,6 +39,7 @@ end
 
 class Config
   class_property debug : Bool = false
+  class_property parsing_mode : Symbol = :ohm
   class_property grammar_file : String?
   class_property args : Array(String) = [] of String
 end
@@ -52,6 +53,16 @@ def main
   OptionParser.parse do |parser|
     parser.banner = "Usage: arborist -g grammar_file.g file_to_parse.ext"
     parser.on("-d", "Enable debug mode.") { Config.debug = true }
+    parser.on("-m mode", "Specify parsing mode: ohm (default), python, simple.\n    ohm mode enables syntactic rule semantics (i.e. rules that start with a capital letter automatically skip whitespace between expression terms).\n    python mode enables indent/dedent rule semantics in which indent/dedent is treated as lexical delimiters\n    simple mode disables ohm mode and python mode\n    (default is ohm mode)") {|mode|
+      modes = {"ohm" => :ohm, "python" => :python, "simple" => :simple}
+      if mode_symbol = modes[mode]?
+        Config.parsing_mode = mode_symbol
+      else
+        STDERR.puts "ERROR: Mode #{mode} is not a valid mode specifier. The mode must be one of the following three options: ohm, python, simple"
+        STDERR.puts parser
+        exit(1)
+      end
+    }
     parser.on("-g grammar_file.g", "Specifies the grammar file") { |file_name| Config.grammar_file = file_name }
     parser.on("-h", "--help", "Show this help") { puts parser; exit }
     parser.on("--simple", "Print the parse tree as simple one-line s-expression. (default is binary mode)") { print_mode = :simple }
@@ -75,7 +86,7 @@ def main
   (STDERR.puts("Input file must be specified") ; exit(1)) unless input_file
   (STDERR.puts("Input file \"#{input_file}\" does not exist") ; exit(1)) unless File.exists?(input_file.as(String))
 
-  run(Config.grammar_file.as(String), input_file.as(String), print_mode, print_timings)
+  run(Config.grammar_file.as(String), input_file.as(String), print_mode, print_timings, Config.parsing_mode)
 end
 
 main
