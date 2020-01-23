@@ -1,4 +1,18 @@
 module Arborist
+  class MemoizedParseTree
+    property parse_tree : ParseTree?    # the parse tree matched at the index position within the memotable array at which this MemoizedParseTree exists
+    property next_pos : Int32
+
+    def initialize(@parse_tree = nil, @next_pos = 0)
+    end
+  end
+
+  # RuleToMemoizedParseTree is a Map from Rule => memoized-parse-tree-with-next-pos-state
+  alias RuleToMemoizedParseTree = Hash(Rule, MemoizedParseTree)
+
+  alias MemoTable = Hash(Int32, RuleToMemoizedParseTree)
+
+
   class RootMemoizationScope
     property memo_table : MemoTable
 

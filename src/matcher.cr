@@ -1,7 +1,6 @@
 require "./dsl"
 require "./char_array"
 require "./expression_call_tree"
-require "./memoization"
 
 module Arborist
   class MatchFailure
