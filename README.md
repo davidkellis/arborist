@@ -366,6 +366,9 @@ and I will try to either clarify things or fix anything that's broken.
 
 ## Todo
 
+- memoize Term and MutexAlt expressions
+- re-implement MutexAlt in terms of a regex/FSM instead of a Set(String)
+- implement Python-style indent/dedent token handling in python mode
 - make sure grammar rules *must* have some kind of body; they can't be blank; currently the parser builder can be tricked into allowing a blank rule if the rule "body" is a comment, e.g. MyRule <-   # some comment goes here
 - implement some kind of non-terminating evaluation logic to identify when a grammar evaluation will never terminate, and report on the termination failure
   - make sure we don't end up in in an infinite loop via a Repetition or RepetitionOnePlus operator, as in the following:

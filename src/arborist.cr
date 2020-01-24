@@ -2,20 +2,7 @@
 # https://ohmlang.github.io/pubs/sle2017/incremental-packrat-parsing.pdf
 # https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
 # http://www.vpri.org/pdf/tr2007002_packrat.pdf
-
-# Per http://bford.info/pub/lang/peg.pdf:
-# Definition:
-# A parsing expression grammar (PEG) is a 4-tuple G = (VN, VT, R, eS),
-# where VN is a finite set of nonterminal symbols, 
-# VT is a finite set of terminal symbols, 
-# R is a finite set of rules, 
-# eS is a parsing expression termed the start expression, and 
-# VN intersection VT = empty set.
-# Each rule r ∈ R is a pair (A,e), which we write A <- e, where
-# A ∈ VN and e is a parsing expression. For any nonterminal A, there
-# is exactly one e such that (A <- e) ∈ R. R is therefore a function
-# from nonterminals to expressions, and we write R(A) to denote the
-# unique expression e such that (A <- e) ∈ R.
+# http://bford.info/pub/lang/peg.pdf:
 
 require "./expression_call_tree"
 require "./grammar"
