@@ -20,17 +20,27 @@ in any lanugage so long as it can read the parse tree format (documentation for 
 
 ## Build Command Line Interface
 ```bash
-$ crystal build -o arborist src/cli.cr
-$ ls -al ./arborist
--rwxr-xr-x@ 1 david  staff  3095952 Nov  2 14:26 ./arborist
+~/projects/arborist ❯ ./build.sh
+~/projects/arborist ❯ ./arborist --help
+Usage: arborist -g grammar_file.g file_to_parse.ext
+    -d                               Enable debug mode.
+    -m mode                          Specify parsing mode: ohm (default), python, simple.
+					ohm mode enables syntactic rule semantics (i.e. rules that start with a capital letter automatically skip whitespace between expression terms).
+					python mode enables indent/dedent rule semantics in which indent/dedent is treated as lexical delimiters
+					simple mode disables ohm mode and python mode
+					(default is ohm mode)
+    -g grammar_file.g                Specifies the grammar file
+    -h, --help                       Show this help
+    --simple                         Print the parse tree as simple one-line s-expression. (default is binary mode)
+    -s                               Print the parse tree as an s-expression. (default is binary mode)
+    -r                               Recognize only; do not print the parse tree. (default is binary mode)
+    -t                               Print time to load grammar and parse. (default to false)
 ```
-
-Alternatively, just run `./build.sh`, which does the same thing as above.
 
 
 ## Run Specs
 ```bash
-~/Dropbox/projects/arborist master *1 !1 ?2 ❯ crystal spec
+~/projects/arborist ❯ crystal spec
 ...........................*.......................
 
 Pending:
@@ -323,7 +333,19 @@ list <- items+=item ("," items+=item)* (";" items+=item)? items+=(foo / bar / ba
 
 ## Example Grammars
 
-In the `examples` directory, there are sample grammars that may be used like the following examples demonstrate:
+The `examples` directory contains some sample grammars that illustrate how to build a working Arborist grammar.
+
+The sample grammars provided are:
+- JSON
+  - `examples/json.arborist`
+  - Ohm style grammar; run arborist in `ohm` mode
+  - Example run: `./arborist -m ohm -r -t -g examples/json.arborist examples/json_example_long.json`
+- JavaScript (ES5)
+  - `examples/es5.arborist`
+  - Simple style grammar; run arborist in `simple` mode
+  - Example run: `./arborist -m simple -r -t -g examples/es5.arborist examples/es5_example_hello_world.js`
+
+The following couple of examples demonstrate how to use the sample grammars:
 
 Check to see if the JavaScript grammar, `examples/es5.arborist`, recognizes the sample javascript file `examples/es5_example_uglifyjs2.js`:
 ```
