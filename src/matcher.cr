@@ -182,7 +182,12 @@ module Arborist
           char_count += line.size
 
           the_context_up_to_and_including_the_error_has_been_printed = char_count >= length_of_context_up_to_and_including_error
-          if need_to_print_error_indicator_line && the_context_up_to_and_including_the_error_has_been_printed
+          the_context_up_to_the_end_of_file_has_been_printed = 
+            char_count == length_of_context_up_to_and_including_error - 1 && pos == @input.size
+
+          if need_to_print_error_indicator_line &&
+              (the_context_up_to_and_including_the_error_has_been_printed ||
+               the_context_up_to_the_end_of_file_has_been_printed)
             need_to_print_error_indicator_line = false
 
             error_position_on_error_line = length_of_context_up_to_and_including_error - character_total_prior_to_error_line
