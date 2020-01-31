@@ -186,7 +186,7 @@ module Arborist
             need_to_print_error_indicator_line = false
 
             error_position_on_error_line = length_of_context_up_to_and_including_error - character_total_prior_to_error_line
-            puts "#{"-" * error_position_on_error_line - 1}^"
+            puts "#{"-" * (error_position_on_error_line - 1)}^"
           end
         end
 
