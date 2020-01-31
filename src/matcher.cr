@@ -181,11 +181,12 @@ module Arborist
           puts("") if line[-1] != '\n'
           char_count += line.size
 
-          if need_to_print_error_indicator_line && char_count >= length_of_context_up_to_and_including_error
+          the_context_up_to_and_including_the_error_has_been_printed = char_count >= length_of_context_up_to_and_including_error
+          if need_to_print_error_indicator_line && the_context_up_to_and_including_the_error_has_been_printed
             need_to_print_error_indicator_line = false
 
-            error_position_on_error_line = length_of_context_up_to_and_including_error - character_total_prior_to_error_line - 1
-            puts "#{"-" * error_position_on_error_line}^"
+            error_position_on_error_line = length_of_context_up_to_and_including_error - character_total_prior_to_error_line
+            puts "#{"-" * error_position_on_error_line - 1}^"
           end
         end
 
