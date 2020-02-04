@@ -115,8 +115,9 @@ module Arborist
     property seed_parse_tree : ParseTree?
     property resulted_in_left_recursion : Bool
     property safe_to_memoize : Bool
-    property parent_of_recursive_call : ApplyCall?
+    property parent_of_recursive_call : ApplyCall?    # this is the parent-recursive application of the rule with the same name as this ApplyCall
     property child_recursive_calls : Set(ApplyCall)
+    property grew_seed_maximally : Bool
 
     def initialize(apply_expr : Apply, @rule, @pos, @left_recursive = false)
       @expr = apply_expr
@@ -135,6 +136,15 @@ module Arborist
       # the last child recursive call.
       @parent_of_recursive_call = nil
       @child_recursive_calls = Set(ApplyCall).new
+      @grew_seed_maximally = false
+    end
+
+    def grew_seed_maximally!
+      @grew_seed_maximally = true
+    end
+
+    def grew_seed_maximally?
+      @grew_seed_maximally
     end
 
     def rule_name
@@ -146,8 +156,27 @@ module Arborist
     end
 
     def should_recursive_application_grow_maximally?(child_rule_application)
+
+      # try #1
       # return (is child_rule_application the left-most recursive child application of the same rule? )
-      @child_recursive_calls.includes?(child_rule_application) && @child_recursive_calls.size == 1   # this logic is an equivalent proxy for "is child_rule_application the first (i.e. left-most) child recursion?"
+      # this logic is a proxy equivalent for "is child_rule_application the only child recursion that is currently growing maximally?"
+      # @child_recursive_calls.includes?(child_rule_application) && @child_recursive_calls.size == 1
+
+      # try #2
+      # We want to ensure that <child_rule_application> only grows maximally if it is the left-most application
+      # occurring at this recursion level (i.e. as a child-recursion of <self>) that has not already grown maximally.
+      # There may be prior child-recursive calls appearing to the left of <child_rule_application>, but those prior
+      # child-recursive calls must be completely finished growing.
+      @child_recursive_calls.includes?(child_rule_application) && 
+        @child_recursive_calls.select {|apply_call| !apply_call.grew_seed_maximally? }.size == 1
+    end
+
+    def should_grow_seed_maximally?
+      parent_of_recursive_call = parent_of_recursive_call()
+
+      resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
+        (parent_of_recursive_call.nil? ||
+         parent_of_recursive_call.should_recursive_application_grow_maximally?(self) )
     end
 
     def log_child_recursive_call(child_recursive_call)
@@ -382,9 +411,28 @@ module Arborist
             # candidate condition 3:
             # for any rule that is potentially left recursive, then we want to only grow a seed on the first left-recursive
             # application that arises through the application of that rule; other recursive applications should not grow a seed
-            should_grow_seed = current_rule_application.resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
-              (parent_application_of_same_rule.nil? ||
-               parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application) )
+            # should_grow_seed = current_rule_application.resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
+            #   (parent_application_of_same_rule.nil? ||
+            #    parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application) )
+            # where should_recursive_application_grow_maximally? is implemented as:
+            #   def should_recursive_application_grow_maximally?(child_rule_application)
+            #     # return (is child_rule_application the left-most recursive child application of the same rule? )
+            #     @child_recursive_calls.includes?(child_rule_application) && @child_recursive_calls.size == 1   # this logic is an equivalent proxy for "is child_rule_application the first (i.e. left-most) child recursion?"
+            #   end
+            # ---
+            # fails: `a,b=1,1+2+1` with grammar: e -> id, id = e, e / add / 1 / 2 ; add -> e + e ; id -> a / b      ; fails to recognize at all
+              
+            # candidate condition 4:
+            # We want to ensure that <child_rule_application> only grows maximally if it is the left-most application
+            # occurring at this recursion level (i.e. as a child-recursion of <self>) that has not already grown maximally.
+            # There may be prior child-recursive calls appearing to the left of <child_rule_application>, but those prior
+            # child-recursive calls must be completely finished growing.
+            #   @child_recursive_calls.includes?(child_rule_application) && 
+            #     @child_recursive_calls.select {|apply_call| !apply_call.grew_seed_maximally? }.size == 1
+            # should_grow_seed = current_rule_application.resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
+            #   (parent_application_of_same_rule.nil? ||
+            #    parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application) )
+            should_grow_seed = current_rule_application.should_grow_seed_maximally?
 
             GlobalDebug.puts "should grow seed? (#{should_grow_seed}) #{current_rule_application.resulted_in_left_recursion?} && ( #{parent_application_of_same_rule.nil?} || #{parent_application_of_same_rule && parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application)}===(#{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.includes?(current_rule_application)} && #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.size } == 1) )"
             GlobalDebug.puts "|-> (call #{parent_application_of_same_rule.object_id}).child_recursive_calls = #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.map(&.object_id) }"
@@ -395,6 +443,7 @@ module Arborist
               if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # we're done growing the seed; it can't grow any further
                 GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos}"
                 full_grown_seed_to_return = seed_parse_tree
+                current_rule_application.grew_seed_maximally!
                 if seed_parse_tree
                   matcher.pos = seed_parse_tree.finishing_pos + 1
                 else
@@ -440,13 +489,6 @@ module Arborist
       GlobalDebug.decrement
       top_level_return_parse_tree
     end                                                                   # line 36 of Algorithm 2
-
-    def current_application_should_grow_seed_maximally?(parent_application_of_same_rule : ApplyCall?, current_rule_application : ApplyCall)
-      # either there is no parent application of this rule
-      # OR or the parent application of this rule indicates that this recursive child application should grow the seed maximally
-      parent_application_of_same_rule.nil? ||
-      parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application)
-    end
 
     def push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
       current_rule_application = ApplyCall.new(self, rule, pos, is_this_application_left_recursive_at_pos)

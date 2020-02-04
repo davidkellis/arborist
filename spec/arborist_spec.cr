@@ -303,6 +303,32 @@ describe Arborist do
             ],
           ")"]
       end
+
+      it "correctly recognizes `a,b=1,1+2+1` with grammar: e -> id, id = e, e / add / 1 / 2 ; add -> e + e ; id -> a / b" do
+        # e -> id, id = e, e / add / 1 / 2
+        # add -> e + e
+        # id -> "a" / "b"
+        e = choice(
+          seq(apply("id"), term(","), apply("id"), term("="), apply("e"), term(","), apply("e")),
+          apply("add"),
+          term("1"),
+          term("2")
+        )
+        add = choice(
+          seq(apply("e"), term("+"), apply("e"))
+        )
+        id = choice(
+          term("a"),
+          term("b")
+        )
+        m = Matcher.new.add_rule("e", e).add_rule("add", add).add_rule("id", id)
+
+        # a,b=1,1+2+1
+        # Arborist::GlobalDebug.enable!
+        m.match("a,b=1,1+2+1", "e").try(&.simple_s_exp).should eq "(e (id a) , (id b) = (e 1) , (e (add (e (add (e 1) + (e 2))) + (e 1))))"
+        # Arborist::GlobalDebug.disable!
+      end
+
     end
 
     # See https://github.com/PhilippeSigaud/Pegged/wiki/Left-Recursion
