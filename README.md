@@ -1,12 +1,11 @@
 # arborist
 
-Arborist is a PEG parser that supports left and right recursion.
+Arborist is a simple PEG parser that supports left-associative left recursion.
 
 Arborist may be used as a PEG parser combinator library or as a command line tool that parses a given input file according to a grammar file and prints the resulting parse tree.
 
 Features
-- Left recursion
-- Right recursion
+- [Left recursion](#left-recursion)
 - May be used as a PEG parser combinator library
 - May be used as a command line parser that produces a parse tree for a given input document
 
@@ -18,93 +17,58 @@ be written to a file or piped to another tool for further processing/manipulatio
 in any lanugage so long as it can read the parse tree format (documentation for the parse tree format is coming soon) that Arborist writes out.
 
 
-## Build Command Line Interface
+## Usage
+
+### Command Line Interface
+
+At some point in the future I'll just make binaries available through GitHub, but for now the process is:
+
 ```bash
+~/projects > git clone https://github.com/davidkellis/arborist.git
+Cloning into 'arborist'...
+remote: Enumerating objects: 18, done.
+remote: Counting objects: 100% (18/18), done.
+remote: Compressing objects: 100% (13/13), done.
+remote: Total 610 (delta 8), reused 12 (delta 5), pack-reused 592
+Receiving objects: 100% (610/610), 7.40 MiB | 2.87 MiB/s, done.
+Resolving deltas: 100% (404/404), done.
+
+~/projects ❯ cd arborist
+
+~/projects/arborist ❯ shards install
+Fetching https://github.com/crystal-community/msgpack-crystal.git
+Fetching https://github.com/crystal-community/msgpack-crystal.git
+Fetching https://github.com/crystal-community/msgpack-crystal.git
+Fetching https://github.com/crystal-community/msgpack-crystal.git
+Installing msgpack (0.16.1)
+Fetching https://github.com/crystal-community/msgpack-crystal.git
+Fetching https://github.com/crystal-community/msgpack-crystal.git
+
 ~/projects/arborist ❯ ./build.sh
+
 ~/projects/arborist ❯ ./arborist --help
 Usage: arborist -g grammar_file.g file_to_parse.ext
     -d                               Enable debug mode.
     -m mode                          Specify parsing mode: ohm (default), python, simple.
-					ohm mode enables syntactic rule semantics (i.e. rules that start with a capital letter automatically skip whitespace between expression terms).
-					python mode enables indent/dedent rule semantics in which indent/dedent is treated as lexical delimiters
-					simple mode disables ohm mode and python mode
-					(default is ohm mode)
+                                        ohm mode enables syntactic rule semantics (i.e. rules that start with a capital letter automatically skip whitespace between expression terms).
+                                        python mode enables indent/dedent rule semantics in which indent/dedent is treated as lexical delimiters
+                                        simple mode disables ohm mode and python mode
+                                        (default is ohm mode)
     -g grammar_file.g                Specifies the grammar file
     -h, --help                       Show this help
     --simple                         Print the parse tree as simple one-line s-expression. (default is binary mode)
     -s                               Print the parse tree as an s-expression. (default is binary mode)
     -r                               Recognize only; do not print the parse tree. (default is binary mode)
     -t                               Print time to load grammar and parse. (default to false)
-```
 
-
-## Run Specs
-```bash
-~/projects/arborist ❯ crystal spec
-...........................*.......................
-
-Pending:
-  Arborist left-recursion support never matches any phrase for the rule: a = !a 'b' ; see https://github.com/harc/ohm/issues/120
-
-Finished in 3.29 seconds
-51 examples, 0 failures, 0 errors, 1 pending
-```
-
-
-## Profiling
-
-### macOS
-
-#### Instruments
-
-Following the instructions captured in http://www.mikeperham.com/2016/06/24/profiling-crystal-on-osx/:
-1. Install Xcode
-2. Make sure you can run the Instruments tool from within Xcode, as described in https://help.apple.com/instruments/mac/current/#/devc1724975
-3. Do the following:
-   ```bash
-   $ instruments -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist
-   # OR
-   # $ instruments -l 30000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 30 seconds of profiling
-   # $ instruments -l 120000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 2 mins of profiling
-   # $ instruments -l 300000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 5 mins of profiling
-   Instruments Trace Complete: ~/projects/arborist/instrumentscli0.trace
-   $ open instrumentscli0.trace
-   # Examine the trace from within the Instruments tool
-   ```
-
-#### dtrace & FlameGraph
-
-Following the instructions captured in https://carol-nichols.com/2017/04/20/rust-profiling-with-dtrace-on-osx/:
-```bash
-$ cd arborist
-$ sudo dtrace -c './arborist -s -g src/grammar.arborist src/grammar.arborist' -o out.stacks -n 'profile-997 /execname == "arborist"/ { @[ustack(100)] = count(); }'
-...
-$ cd ..
-$ git clone https://github.com/brendangregg/FlameGraph.git
-Cloning into 'FlameGraph'...
-remote: Enumerating objects: 25, done.
-remote: Counting objects: 100% (25/25), done.
-remote: Compressing objects: 100% (20/20), done.
-remote: Total 1063 (delta 11), reused 13 (delta 5), pack-reused 1038
-Receiving objects: 100% (1063/1063), 1.88 MiB | 4.19 MiB/s, done.
-Resolving deltas: 100% (606/606), done.
-$ cd FlameGraph
-$ ./stackcollapse.pl ../arborist/out.stacks | ./flamegraph.pl > ~/Downloads/arborist_flamegraph.svg
-# Examine the FlameGraph plot in a web browser (e.g. Firefox) or some other SVG file viewer
-```
-
-## Usage
-
-### Command Line Interface
-
-```bash
-~/projects/arborist ❯ ./build.sh
-~/projects/arborist ❯ cat mygrammar.g
+~/projects/arborist ❯ cat mygrammar.arborist
 Start <- E !.
 E <- E "-" E / E "+" E / ("0".."9")+
+
 ~/projects/arborist ❯ cat input_document.txt
 1-2+3-4+5
-~/projects/arborist ❯ ./arborist --simple -g mygrammar.g input_document.txt
+
+~/projects/arborist ❯ ./arborist --simple -g mygrammar.arborist input_document.txt
 (Start (E (E (E (E (E 1) - (E 2)) + (E 3)) - (E 4)) + (E 5)))
 ```
 
@@ -361,7 +325,8 @@ timings: load grammar = 00:00:04.838410000 ; parse = 00:00:00.011605000
 (Start (__ ) (Program (SourceElements (SourceElement (FunctionDeclaration (FunctionToken function) (__ (WhiteSpace )) (Identifier (IdentifierName (IdentifierStart (UnicodeLetter (Ll (unicode_lower h)))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower e))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower l))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower l))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower o))))))) (__ ) ( (__ ) (FormalParameterList (Identifier (IdentifierName (IdentifierStart (UnicodeLetter (Ll (unicode_lower w)))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower o))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower r))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower l))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower d)))))))) (__ ) ) (__ (WhiteSpace )) { (__ (LineTerminatorSequence ) (WhiteSpace ) (WhiteSpace )) (FunctionBody (SourceElements (SourceElement (Statement (ReturnStatement (ReturnToken return) (_ (WhiteSpace )) (Expression (AssignmentExpression (ConditionalExpression (LogicalORExpression (LogicalANDExpression (BitwiseORExpression (BitwiseXORExpression (BitwiseANDExpression (EqualityExpression (RelationalExpression (ShiftExpression (AdditiveExpression (MultiplicativeExpression (UnaryExpression (PostfixExpression (LeftHandSideExpression (NewExpression (MemberExpression (PrimaryExpression (Literal (StringLiteral " (DoubleStringCharacter (SourceCharacter h)) (DoubleStringCharacter (SourceCharacter e)) (DoubleStringCharacter (SourceCharacter l)) (DoubleStringCharacter (SourceCharacter l)) (DoubleStringCharacter (SourceCharacter o)) "))))))))) (__ (WhiteSpace )) (AdditiveOperator +) (__ (WhiteSpace )) (MultiplicativeExpression (UnaryExpression (PostfixExpression (LeftHandSideExpression (NewExpression (MemberExpression (PrimaryExpression (Identifier (IdentifierName (IdentifierStart (UnicodeLetter (Ll (unicode_lower w)))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower o))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower r))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower l))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower d)))))))))))))))))))))))))) (EOS (__ ) ;)))))) (__ (LineTerminatorSequence )) })) (__ (LineTerminatorSequence ) (LineTerminatorSequence )) (SourceElement (Statement (ExpressionStatement (Expression (AssignmentExpression (ConditionalExpression (LogicalORExpression (LogicalANDExpression (BitwiseORExpression (BitwiseXORExpression (BitwiseANDExpression (EqualityExpression (RelationalExpression (ShiftExpression (AdditiveExpression (MultiplicativeExpression (UnaryExpression (PostfixExpression (LeftHandSideExpression (CallExpression (MemberExpression (PrimaryExpression (Identifier (IdentifierName (IdentifierStart (UnicodeLetter (Ll (unicode_lower c)))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower o))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower n))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower s))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower o))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower l))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower e)))))))) (__ ) . (__ ) (IdentifierName (IdentifierStart (UnicodeLetter (Ll (unicode_lower l)))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower o))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower g))))))) (__ ) (Arguments ( (__ ) (ArgumentList (AssignmentExpression (ConditionalExpression (LogicalORExpression (LogicalANDExpression (BitwiseORExpression (BitwiseXORExpression (BitwiseANDExpression (EqualityExpression (RelationalExpression (ShiftExpression (AdditiveExpression (MultiplicativeExpression (UnaryExpression (PostfixExpression (LeftHandSideExpression (CallExpression (MemberExpression (PrimaryExpression (Identifier (IdentifierName (IdentifierStart (UnicodeLetter (Ll (unicode_lower h)))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower e))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower l))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower l))))) (IdentifierPart (IdentifierStart (UnicodeLetter (Ll (unicode_lower o))))))))) (__ ) (Arguments ( (__ ) (ArgumentList (AssignmentExpression (ConditionalExpression (LogicalORExpression (LogicalANDExpression (BitwiseORExpression (BitwiseXORExpression (BitwiseANDExpression (EqualityExpression (RelationalExpression (ShiftExpression (AdditiveExpression (MultiplicativeExpression (UnaryExpression (PostfixExpression (LeftHandSideExpression (NewExpression (MemberExpression (PrimaryExpression (Literal (StringLiteral " (DoubleStringCharacter (SourceCharacter w)) (DoubleStringCharacter (SourceCharacter o)) (DoubleStringCharacter (SourceCharacter r)) (DoubleStringCharacter (SourceCharacter l)) (DoubleStringCharacter (SourceCharacter d)) "))))))))))))))))))))) (__ ) ))))))))))))))))))) (__ ) ))))))))))))))))))) (EOS (__ ) (EOF ))))))) (__ ))
 ```
 
-## Implementation Notes
+
+## Left Recursion
 
 Left recursion is supported via a derivation of Tratt's Algorithm 2 (see https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/)
 
@@ -386,14 +351,70 @@ recursion. I believe my implementation does that. If you run into any unexpected
 and I will try to either clarify things or fix anything that's broken.
 
 
-## Todo
+## Run Specs
+```bash
+~/projects/arborist ❯ crystal spec
+...........................*.......................
 
+Pending:
+  Arborist left-recursion support never matches any phrase for the rule: a = !a 'b' ; see https://github.com/harc/ohm/issues/120
+
+Finished in 3.29 seconds
+51 examples, 0 failures, 0 errors, 1 pending
+```
+
+
+## Profiling
+
+### macOS
+
+#### Instruments
+
+Following the instructions captured in http://www.mikeperham.com/2016/06/24/profiling-crystal-on-osx/:
+1. Install Xcode
+2. Make sure you can run the Instruments tool from within Xcode, as described in https://help.apple.com/instruments/mac/current/#/devc1724975
+3. Do the following:
+   ```bash
+   $ instruments -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist
+   # OR
+   # $ instruments -l 30000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 30 seconds of profiling
+   # $ instruments -l 120000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 2 mins of profiling
+   # $ instruments -l 300000 -t "Time Profiler" ./arborist -s -g src/grammar.arborist src/grammar.arborist     # 5 mins of profiling
+   Instruments Trace Complete: ~/projects/arborist/instrumentscli0.trace
+   $ open instrumentscli0.trace
+   # Examine the trace from within the Instruments tool
+   ```
+
+#### dtrace & FlameGraph
+
+Following the instructions captured in https://carol-nichols.com/2017/04/20/rust-profiling-with-dtrace-on-osx/:
+```bash
+$ cd arborist
+$ sudo dtrace -c './arborist -s -g src/grammar.arborist src/grammar.arborist' -o out.stacks -n 'profile-997 /execname == "arborist"/ { @[ustack(100)] = count(); }'
+...
+$ cd ..
+$ git clone https://github.com/brendangregg/FlameGraph.git
+Cloning into 'FlameGraph'...
+remote: Enumerating objects: 25, done.
+remote: Counting objects: 100% (25/25), done.
+remote: Compressing objects: 100% (20/20), done.
+remote: Total 1063 (delta 11), reused 13 (delta 5), pack-reused 1038
+Receiving objects: 100% (1063/1063), 1.88 MiB | 4.19 MiB/s, done.
+Resolving deltas: 100% (606/606), done.
+$ cd FlameGraph
+$ ./stackcollapse.pl ../arborist/out.stacks | ./flamegraph.pl > ~/Downloads/arborist_flamegraph.svg
+# Examine the FlameGraph plot in a web browser (e.g. Firefox) or some other SVG file viewer
+```
+
+
+## Next Steps
+
+- implement Python-style indent/dedent token handling in python mode
 - memoize Term and MutexAlt expressions
 - re-implement MutexAlt in terms of a regex/FSM instead of a Set(String)
-- implement Python-style indent/dedent token handling in python mode
-- make sure grammar rules *must* have some kind of body; they can't be blank; currently the parser builder can be tricked into allowing a blank rule if the rule "body" is a comment, e.g. MyRule <-   # some comment goes here
+- make sure grammar rules *must* have some kind of body; they can't be blank; currently the parser builder can be tricked into allowing a blank rule if the rule body is a comment, e.g. `MyRule <-   # foo bar baz`
 - implement some kind of non-terminating evaluation logic to identify when a grammar evaluation will never terminate, and report on the termination failure
-  - make sure we don't end up in in an infinite loop via a Repetition or RepetitionOnePlus operator, as in the following:
+  - this would help ensure we don't end up in in an infinite loop via a Repetition or RepetitionOnePlus operator, as in the following:
 ```
 |  finishing seed growth for rule SourceElement at 2 : '(Statement (DebuggerStatement ))'
 |  matched SourceElement (call 5021071072) at 2 : '(SourceElement (Statement (DebuggerStatement )))'
