@@ -1,0 +1,294 @@
+# this grammar is derived from https://github.com/pegjs/pegjs/blob/master/examples/css.pegjs
+css {
+  // CSS Grammar
+  // ===========
+  //
+  // Based on grammar from CSS 2.1 specification [1] (including the errata [2]).
+  // Generated parser builds a syntax tree composed of nested JavaScript objects,
+  // vaguely inspired by CSS DOM [3]. The CSS DOM itself wasn't used as it is not
+  // expressive enough (e.g. selectors are reflected as text, not structured
+  // objects) and somewhat cumbersome.
+  //
+  // Limitations:
+  //
+  //   * Many errors which should be recovered from according to the specification
+  //     (e.g. malformed declarations or unexpected end of stylesheet) are fatal.
+  //     This is a result of straightforward rewrite of the CSS grammar to PEG.js.
+  //
+  // [1] http://www.w3.org/TR/2011/REC-CSS2-20110607
+  // [2] http://www.w3.org/Style/css2-updates/REC-CSS2-20110607-errata.html
+  // [3] http://www.w3.org/TR/DOM-Level-2-Style/css.html
+
+  start
+    <- stylesheet=stylesheet comment*
+
+  // ----- G.1 Grammar -----
+
+  stylesheet
+    <- charset=(CHARSET_SYM STRING ";")? (S / CDO / CDC)*
+      imports=(import (CDO S* / CDC S*)*)*
+      rules=((ruleset / media / page) (CDO S* / CDC S*)*)*
+
+  import
+    <- IMPORT_SYM S* href=(STRING / URI) S* media=media_list? ";" S*
+
+  media
+    <- MEDIA_SYM S* media=media_list "{" S* rules=ruleset* "}" S*
+
+  media_list
+    <- head=medium tail=("," S* medium)*
+
+  medium
+    <- name=IDENT S*
+
+  page
+    <- PAGE_SYM S* selector=pseudo_page?
+      "{" S*
+      declarationsHead=declaration?
+      declarationsTail=(";" S* declaration?)*
+      "}" S*
+
+  pseudo_page
+    <- ":" value=IDENT S*
+
+  operator
+    <- "/" S*
+    / "," S*
+
+  combinator
+    <- "+" S*
+    / ">" S*
+
+  property
+    <- name=IDENT S*
+
+  ruleset
+    <- selectorsHead=selector
+      selectorsTail=("," S* selector)*
+      "{" S*
+      declarationsHead=declaration?
+      declarationsTail=(";" S* declaration?)*
+      "}" S*
+
+  selector
+    <- left=simple_selector S* combinator=combinator right=selector
+    / left=simple_selector S+ right=selector
+    / selector=simple_selector S*
+
+  simple_selector
+    <- element=element_name qualifiers=(id / class / attrib / pseudo)*
+    / qualifiers=(id / class / attrib / pseudo)+
+
+  id
+    <- id=HASH
+
+  class
+    <- "." class_=IDENT
+
+  element_name
+    <- IDENT
+    / "*"
+
+  attrib
+    <- "[" S*
+      attribute=IDENT S*
+      operatorAndValue=(("=" / INCLUDES / DASHMATCH) S* (IDENT / STRING) S*)?
+      "]"
+
+  pseudo
+    <- ":"
+      value=(
+          name=FUNCTION S* params=(IDENT S*)? ")" 
+        / IDENT
+      )
+     
+
+  declaration
+    <- name=property ":" S* value=expr prio=prio?
+
+  prio
+    <- IMPORTANT_SYM S*
+
+  expr
+    <- head=term tail=(operator? term)*
+
+  term
+    <- quantity=(PERCENTAGE / LENGTH / EMS / EXS / ANGLE / TIME / FREQ / NUMBER) S*
+    / value=STRING S*
+    / value=URI S*   
+    / function
+    / hexcolor
+    / value=IDENT S* 
+
+  function
+    <- name=FUNCTION S* params=expr ")" S*
+
+  hexcolor
+    <- value=HASH S*
+
+  // ----- G.2 Lexical scanner -----
+
+  // Macros
+
+  h
+    <- "0".."9" / "a".."f" / "A".."F"
+
+  nonascii
+    <- "\x80".."\uFFFF"
+
+  unicode
+    <- "\\" digits=(h h? h? h? h? h?) ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))?   # \x0C is \f (form feed)
+
+  escape
+    <- unicode
+    / "\\" ch=(!("\r" / "\n" / "\x0C" / "0".."9" / "a".."f" / "A".."F") .)    # \x0C is \f (form feed)
+
+  nmstart
+    <- "_" / "a".."z" / "A".."Z"
+    / nonascii
+    / escape
+
+  nmchar
+    <- "_" / "-" / "a".."z" / "A".."Z" / "0".."9"
+    / nonascii
+    / escape
+
+  string1
+    <- "\"" chars=((!("\n" / "\r" / "\x0C" / "\\" / "\"") .) / "\\" nl=nl / escape)* "\""
+
+  string2
+    <- "'" chars=((!("\n" / "\r" / "\x0C" / "\\" / "'") .) / "\\" nl=nl / escape)* "'"
+
+  comment
+    <- "/*" (!"*" .)* "*"+ ((!("/" / "*") .) (!"*" .)* "*"+)* "/"
+
+  ident
+    <- prefix="-"? start=nmstart chars=nmchar*
+
+  name
+    <- chars=nmchar+
+
+  num
+    <- ("+" / "-")? (("0".."9")* "." ("0".."9")+ / ("0".."9")+) ("e" ("+" / "-")? ("0".."9")+)?
+
+  string
+    <- string1
+    / string2
+
+  url
+    <- chars=(("!" / "#" / "$" / "%" / "&" / "*".."[" / "]".."~") / nonascii / escape)*
+
+  s
+    <- (" " / "\t" / "\r" / "\n" / "\x0C")+   # \x0C is \f (form feed)
+
+  w
+    <- s?
+
+  nl
+    <- "\n"
+    / "\r\n"
+    / "\r"
+    / "\x0C"
+
+  A  <- ("a" / "A") / "\\" "0"? "0"? "0"? "0"? ("\x41" / "\x61") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))?                       # \x0C is \f (form feed)
+  C  <- ("c" / "C") / "\\" "0"? "0"? "0"? "0"? ("\x43" / "\x63") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))?                       # \x0C is \f (form feed)
+  D  <- ("d" / "D") / "\\" "0"? "0"? "0"? "0"? ("\x44" / "\x64") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))?                       # \x0C is \f (form feed)
+  E  <- ("e" / "E") / "\\" "0"? "0"? "0"? "0"? ("\x45" / "\x65") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))?                       # \x0C is \f (form feed)
+  G  <- ("g" / "G") / "\\" "0"? "0"? "0"? "0"? ("\x47" / "\x67") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\g" / "\\G")     # \x0C is \f (form feed)
+  H  <- ("h" / "H") / "\\" "0"? "0"? "0"? "0"? ("\x48" / "\x68") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\h" / "\\H")     # \x0C is \f (form feed)
+  I  <- ("i" / "I") / "\\" "0"? "0"? "0"? "0"? ("\x49" / "\x69") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\i" / "\\I")     # \x0C is \f (form feed)
+  K  <- ("k" / "K") / "\\" "0"? "0"? "0"? "0"? ("\x4b" / "\x6b") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\k" / "\\K")     # \x0C is \f (form feed)
+  L  <- ("l" / "L") / "\\" "0"? "0"? "0"? "0"? ("\x4c" / "\x6c") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\l" / "\\L")     # \x0C is \f (form feed)
+  M  <- ("m" / "M") / "\\" "0"? "0"? "0"? "0"? ("\x4d" / "\x6d") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\m" / "\\M")     # \x0C is \f (form feed)
+  N  <- ("n" / "N") / "\\" "0"? "0"? "0"? "0"? ("\x4e" / "\x6e") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\n" / "\\N")     # \x0C is \f (form feed)
+  O  <- ("o" / "O") / "\\" "0"? "0"? "0"? "0"? ("\x4f" / "\x6f") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\o" / "\\O")     # \x0C is \f (form feed)
+  P  <- ("p" / "P") / "\\" "0"? "0"? "0"? "0"? ("\x50" / "\x70") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\p" / "\\P")     # \x0C is \f (form feed)
+  R  <- ("r" / "R") / "\\" "0"? "0"? "0"? "0"? ("\x52" / "\x72") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\r" / "\\R")     # \x0C is \f (form feed)
+  S_ <- ("s" / "S") / "\\" "0"? "0"? "0"? "0"? ("\x53" / "\x73") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\s" / "\\S")     # \x0C is \f (form feed)
+  T  <- ("t" / "T") / "\\" "0"? "0"? "0"? "0"? ("\x54" / "\x74") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\t" / "\\T")     # \x0C is \f (form feed)
+  U  <- ("u" / "U") / "\\" "0"? "0"? "0"? "0"? ("\x55" / "\x75") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\u" / "\\U")     # \x0C is \f (form feed)
+  X  <- ("x" / "X") / "\\" "0"? "0"? "0"? "0"? ("\x58" / "\x78") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\x" / "\\X")     # \x0C is \f (form feed)
+  Z  <- ("z" / "Z") / "\\" "0"? "0"? "0"? "0"? ("\x5a" / "\x7a") ("\r\n" / (" " / "\t" / "\r" / "\n" / "\x0C"))? / ("\\z" / "\\Z")     # \x0C is \f (form feed)
+
+  // Tokens
+
+  S #"whitespace"
+    <- comment* s
+
+  CDO #"<!--"
+    <- comment* "<!--"
+
+  CDC #"-->"
+    <- comment* "-->"
+
+  INCLUDES #"~="
+    <- comment* "~="
+
+  DASHMATCH #"|="
+    <- comment* "|="
+
+  STRING #"string"
+    <- comment* string=string
+
+  IDENT #"identifier"
+    <- comment* ident=ident
+
+  HASH #"hash"
+    <- comment* "#" name=name
+
+  IMPORT_SYM #"@import"
+    <- comment* "@" I M P O R T
+
+  PAGE_SYM #"@page"
+    <- comment* "@" P A G E
+
+  MEDIA_SYM #"@media"
+    <- comment* "@" M E D I A
+
+  CHARSET_SYM #"@charset"
+    <- comment* "@charset "
+
+  // We use |s| instead of |w| here to avoid infinite recursion.
+  IMPORTANT_SYM #"!important"
+    <- comment* "!" (s / comment)* I M P O R T A N T
+
+  EMS #"length"
+    <- comment* value=num E M
+
+  EXS #"length"
+    <- comment* value=num E X
+
+  LENGTH #"length"
+    <- comment* value=num P X
+    / comment* value=num C M
+    / comment* value=num M M
+    / comment* value=num I N
+    / comment* value=num P T
+    / comment* value=num P C
+
+  ANGLE #"angle"
+    <- comment* value=num D E G  
+    / comment* value=num R A D  
+    / comment* value=num G R A D
+
+  TIME #"time"
+    <- comment* value=num M S_
+    / comment* value=num S_  
+
+  FREQ #"frequency"
+    <- comment* value=num H Z  
+    / comment* value=num K H Z
+
+  PERCENTAGE #"percentage"
+    <- comment* value=num "%"
+
+  NUMBER #"number"
+    <- comment* value=num
+
+  URI #"uri"
+    <- comment* U R L "(" w url=string w ")"
+    / comment* U R L "(" w url=url w ")"   
+
+  FUNCTION #"function"
+    <- comment* name=ident "("
+}
