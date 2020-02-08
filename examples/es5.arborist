@@ -1,4 +1,4 @@
-# This grammar is based on https://raw.githubusercontent.com/pegjs/pegjs/master/examples/javascript.pegjs
+# This grammar is derived from https://raw.githubusercontent.com/pegjs/pegjs/master/examples/javascript.pegjs
 
 javascript {
 
