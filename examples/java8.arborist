@@ -1,5 +1,4 @@
-# This grammar is derived from http://mousepeg.sourceforge.net/Grammars/Java.12.peg
-# This grammar doesn't seem to work yet. Consider this one a work-in-progress.
+# This grammar is derived from http://www.romanredz.se/Mouse/Grammars/Java.1.8.peg
 
 //=========================================================================
 //  Compilation
@@ -7,6 +6,7 @@
 
 Compilation
     <- Spacing CompilationUnit SUB? EOT
+
 
 //=========================================================================
 //  JLS 3  Lexical Structure
@@ -48,13 +48,11 @@ Spacing
 //  JLS 3.8  Identifiers
 //-------------------------------------------------------------------------
 
-Identifier  <- !Reserved Letter LetterOrDigit* Spacing 
+Identifier  <- !Keyword Letter LetterOrDigit* Spacing 
 
-TypeIdentifier  <- !(Reserved / "var") Letter LetterOrDigit* Spacing 
+Letter <- "a".."z" / "A".."Z" / ("_" / "$") 
 
-Letter <- "a".."z" / "A".."Z" / ("_" / "$")
-
-LetterOrDigit <- "a".."z" / "A".."Z" / "0".."9" / ("_" / "$")
+LetterOrDigit <- "a".."z" / "A".."Z" / "0".."9" / ("_" / "$") 
 
 // These are traditional definitions of letters and digits.
 // JLS defines letters and digits as Unicode characters recognized
@@ -63,13 +61,13 @@ LetterOrDigit <- "a".."z" / "A".."Z" / "0".."9" / ("_" / "$")
 
 //-------------------------------------------------------------------------
 //  JLS 3.9  Keywords
-//-------------------------------------------------------------------------
-//  Reserved words. According to JLS, "true", "false", and "null"
-//  are technically not keywords - but still must not appear as identifiers.
-//  Keywords "const" and "goto" are not used; JLS explains the reason.
+//  More precisely: reserved words. According to JLS, "true", "false",
+//  and "null" are technically not keywords - but still must not appear
+//  as identifiers. Keywords "const" and "goto" are not used; JLS explains
+//  the reason.
 //-------------------------------------------------------------------------
 
-Reserved
+Keyword
     <- ( "abstract"
       / "assert"
       / "boolean"
@@ -123,13 +121,8 @@ Reserved
       / "void"
       / "volatile"
       / "while"
-      / "_"
       ) !LetterOrDigit
     
-
-//-------------------------------------------------------------------------
-//  Keywords
-//-------------------------------------------------------------------------
 
 ABSTRACT     <- "abstract"     !LetterOrDigit Spacing 
 ASSERT       <- "assert"       !LetterOrDigit Spacing 
@@ -184,22 +177,6 @@ VOLATILE     <- "volatile"     !LetterOrDigit Spacing
 WHILE        <- "while"        !LetterOrDigit Spacing 
 
 //-------------------------------------------------------------------------
-//  Restricted Keywords
-//-------------------------------------------------------------------------
-
-OPEN        <- "open"        !LetterOrDigit Spacing 
-MODULE      <- "module"      !LetterOrDigit Spacing 
-REQUIRES    <- "requires"    !LetterOrDigit Spacing 
-TRANSITIVE  <- "transitive"  !LetterOrDigit Spacing 
-EXPORTS     <- "exports"     !LetterOrDigit Spacing 
-OPENS       <- "opens"       !LetterOrDigit Spacing 
-TO          <- "to"          !LetterOrDigit Spacing 
-USES        <- "uses"        !LetterOrDigit Spacing 
-PROVIDES    <- "provides"    !LetterOrDigit Spacing 
-WITH        <- "with"        !LetterOrDigit Spacing 
-VAR         <- "var"         !LetterOrDigit Spacing 
-
-//-------------------------------------------------------------------------
 //  JLS 3.10  Literals
 //-------------------------------------------------------------------------
 
@@ -226,7 +203,7 @@ IntegerLiteral
 
 DecimalNumeral
     <- "0"
-    / "1".."9" ("_"* "0".."9")*
+    / "1".."9"("_"*"0".."9")*
     
 
 HexNumeral
@@ -293,7 +270,7 @@ BooleanLiteral
 
 CharLiteral
     <- "'" (Escape / (!("'" / "\\" / "\n" / "\r") .) ) "'" Spacing             // this " keeps the editor happy
-
+    
 
 //-------------------------------------------------------------------------
 //  JLS 3.10.5 String Literals
@@ -368,7 +345,7 @@ INC             <-   "++"      Spacing
 LE              <-   "<="      Spacing 
 LPOINT          <-   "<"       Spacing 
 LT              <-   "<"!("=" / "<")  Spacing 
-MINUS           <-   "-"!("=" / "-" / ">")  Spacing 
+MINUS           <-   "-"!("=" / "-" / ">") Spacing 
 MINUSEQU        <-   "-="      Spacing 
 MOD             <-   "%"!"="   Spacing 
 MODEQU          <-   "%="      Spacing 
@@ -396,56 +373,48 @@ TILDE           <-   "~"       Spacing
 //  JLS 4.2  Primitive Types and Values
 //-------------------------------------------------------------------------
 
-PrimitiveType
-    <- Annotation* NumericType
-    / Annotation* BOOLEAN
-    
-
-NumericType
-    <- IntegralType
-    / FloatingPointType
-    
-
-IntegralType
+BasicType
     <- BYTE
     / SHORT
     / INT
     / LONG
     / CHAR
+    / FLOAT
+    / DOUBLE
+    / BOOLEAN
     
 
-FloatingPointType
-    <- FLOAT
-    / DOUBLE
-    
+PrimitiveType
+    <- Annotation* BasicType 
 
 //-------------------------------------------------------------------------
 //  JLS 4.3  Reference Types and Values
 //-------------------------------------------------------------------------
 
 ReferenceType
-    <- ArrayType
-    / ClassType
-    / TypeVariable
+    <- PrimitiveType Dim+
+    / ClassType Dim*
     
 
 ClassType
-    <- ( Annotation* TypeIdentifier TypeArguments?
-      / Name DOT Annotation* TypeIdentifier TypeArguments? )
-      ( DOT Annotation* TypeIdentifier TypeArguments? )*
+    <- Annotation* Identifier TypeArguments?
+          (DOT Annotation* Identifier TypeArguments?)* 
+
+Type
+    <- PrimitiveType
+    / ClassType
+    
+
+ArrayType
+    <- PrimitiveType Dim+
+    / ClassType Dim+
     
 
 TypeVariable
-    <- Annotation* TypeIdentifier 
+    <- Annotation* Identifier 
 
-ArrayType
-    <- PrimitiveType Dims
-    / ClassType Dims
-    / TypeVariable Dims
-    
-
-Dims
-    <- Annotation* LBRK RBRK (Annotation* LBRK RBRK)* 
+Dim
+    <- Annotation* LBRK RBRK 
 
 //-------------------------------------------------------------------------
 //  JLS 4.4  Type Variables
@@ -458,9 +427,7 @@ TypeParameterModifier
     <- Annotation 
 
 TypeBound
-    <- EXTENDS ClassType AdditionalBound*
-    / EXTENDS TypeVariable
-    
+    <- EXTENDS (ClassType AdditionalBound* / TypeVariable) 
 
 AdditionalBound
     <- AND ClassType 
@@ -488,18 +455,14 @@ WildcardBounds
     / SUPER ReferenceType
     
 
+
 //=========================================================================
 //  JLS 6  Names
 //=========================================================================
-//-------------------------------------------------------------------------
-//  JLS 6.5  Determining the Meaning of a Name
-//-------------------------------------------------------------------------
 
-Name
+QualIdent
     <- Identifier (DOT Identifier)* 
 
-TypeName
-    <- TypeIdentifier (DOT TypeIdentifier)* 
 
 //=========================================================================
 //  JLS 7  Packages
@@ -509,15 +472,7 @@ TypeName
 //-------------------------------------------------------------------------
 
 CompilationUnit
-    <- ModularCompilationUnit
-    / OrdinaryCompilationUnit
-    
-
-OrdinaryCompilationUnit
     <- PackageDeclaration? ImportDeclaration* TypeDeclaration* 
-
-ModularCompilationUnit
-    <- ImportDeclaration* ModuleDeclaration 
 
 //-------------------------------------------------------------------------
 //  JLS 7.4  Package Declarations
@@ -534,24 +489,9 @@ PackageModifier
 //-------------------------------------------------------------------------
 
 ImportDeclaration
-    <- SingleTypeImportDeclaration
-    / TypeImportOnDemandDeclaration
-    / SingleStaticImportDeclaration
-    / StaticImportOnDemandDeclaration
+    <- IMPORT STATIC? QualIdent (DOT STAR)? SEMI
     / SEMI
     
-
-SingleTypeImportDeclaration
-    <- IMPORT TypeName SEMI 
-
-TypeImportOnDemandDeclaration
-    <- IMPORT Name DOT STAR SEMI 
-
-SingleStaticImportDeclaration
-    <- IMPORT STATIC TypeName (DOT Identifier)? SEMI 
-
-StaticImportOnDemandDeclaration
-    <- IMPORT STATIC TypeName DOT STAR SEMI 
 
 //-------------------------------------------------------------------------
 //  JLS 7.6  Top Level Type Declarations
@@ -561,26 +501,6 @@ TypeDeclaration
     <- ClassDeclaration
     / InterfaceDeclaration
     / SEMI
-    
-
-//-------------------------------------------------------------------------
-//  JLS 7.7  Module Declarations
-//-------------------------------------------------------------------------
-
-ModuleDeclaration
-    <- Annotation* OPEN? MODULE Identifier (DOT Identifier)* LWING ModuleDirective* RWING 
-
-ModuleDirective
-    <- REQUIRES RequiresModifier* Name SEMI
-    / EXPORTS Name (TO Name (COMMA Name)*)? SEMI
-    / OPENS Name (TO Name (COMMA Name)*)? SEMI
-    / USES TypeName SEMI
-    / PROVIDES TypeName WITH TypeName (COMMA TypeName)* SEMI
-    
-
-RequiresModifier
-    <- TRANSITIVE
-    / STATIC
     
 
 
@@ -659,42 +579,20 @@ VariableDeclarator
     <- VariableDeclaratorId (EQU VariableInitializer)? 
 
 VariableDeclaratorId
-    <- Identifier Dims? 
+    <- Identifier Dim* 
 
 VariableInitializer
     <- Expression
     / ArrayInitializer
     
 
-UnannType
-    <- UnannReferenceType
-    / UnannPrimitiveType
-    
-
-UnannPrimitiveType
-    <- NumericType
-    / BOOLEAN
-    
-
-UnannReferenceType
-    <- UnannArrayType
-    / UnannClassType
-    / UnannTypeVariable
-    
-
 UnannClassType
-    <- ( TypeIdentifier TypeArguments?
-      / Name DOT Annotation* TypeIdentifier TypeArguments? )
-      ( DOT Annotation* TypeIdentifier TypeArguments? )*
-    
+    <- Identifier TypeArguments?
+          (DOT Annotation* Identifier TypeArguments?)*  
 
-UnannTypeVariable
-    <- TypeIdentifier 
-
-UnannArrayType
-    <- UnannPrimitiveType Dims
-    / UnannClassType Dims
-    / UnannTypeVariable Dims
+UnannType
+    <- BasicType Dim*
+    / UnannClassType Dim*
     
 
 FieldModifier
@@ -721,30 +619,27 @@ MethodHeader
     
 
 MethodDeclarator
-    <- Identifier LPAR FormalParametersWithReceiver RPAR Dims? 
-
-FormalParametersWithReceiver
-    <- ReceiverParameter (COMMA FormalParameterList)?
-    / FormalParameterList?
-    
-
-ReceiverParameter
-    <- Annotation* UnannType (Identifier DOT)? THIS 
+    <- Identifier LPAR FormalParameterList? RPAR Dim* 
 
 FormalParameterList
-    <- FormalParameter (COMMA FormalParameter)* 
+    <- (ReceiverParameter / FormalParameter)(COMMA FormalParameter)* 
 
 FormalParameter
     <- VariableModifier* UnannType VariableDeclaratorId
-    / VariableArityParameter !COMMA
+    / VariableModifier* UnannType Annotation* ELLIPSIS VariableDeclaratorId !COMMA
     
-
-VariableArityParameter
-    <- VariableModifier* UnannType Annotation* ELLIPSIS Identifier
 
 VariableModifier
     <- Annotation
     / FINAL
+    
+
+ReceiverParameter
+    <- VariableModifier* UnannType (Identifier DOT)? THIS 
+
+Result
+    <- UnannType
+    / VOID
     
 
 MethodModifier
@@ -758,11 +653,6 @@ MethodModifier
     / SYNCHRONIZED
     / NATIVE
     / STRICTFP
-    
-
-Result
-    <- UnannType
-    / VOID
     
 
 Throws
@@ -803,10 +693,7 @@ ConstructorDeclaration
     <- ConstructorModifier* ConstructorDeclarator Throws? ConstructorBody 
 
 ConstructorDeclarator
-    <- TypeParameters? SimpleTypeName LPAR FormalParametersWithReceiver RPAR 
-
-SimpleTypeName
-    <- TypeIdentifier 
+    <- TypeParameters? Identifier LPAR FormalParameterList? RPAR 
 
 ConstructorModifier
     <- Annotation
@@ -819,10 +706,10 @@ ConstructorBody
     <- LWING ExplicitConstructorInvocation? BlockStatements? RWING 
 
 ExplicitConstructorInvocation
-    <- TypeArguments? THIS LPAR ArgumentList? RPAR SEMI
-    / TypeArguments? SUPER LPAR ArgumentList? RPAR SEMI
-    / Primary DOT TypeArguments? SUPER LPAR ArgumentList? RPAR SEMI
-    / Name DOT TypeArguments? SUPER LPAR ArgumentList? RPAR SEMI
+    <- TypeArguments? THIS Arguments SEMI
+    / TypeArguments? SUPER Arguments SEMI
+    / Primary DOT TypeArguments? SUPER Arguments SEMI
+    / QualIdent DOT TypeArguments? SUPER Arguments SEMI
     
 
 //-------------------------------------------------------------------------
@@ -830,7 +717,7 @@ ExplicitConstructorInvocation
 //-------------------------------------------------------------------------
 
 EnumDeclaration
-    <- ClassModifier* ENUM TypeIdentifier Superinterfaces? EnumBody 
+    <- ClassModifier* ENUM Identifier Superinterfaces? EnumBody 
 
 EnumBody
     <- LWING EnumConstantList? COMMA? EnumBodyDeclarations? RWING 
@@ -839,13 +726,14 @@ EnumConstantList
     <- EnumConstant (COMMA EnumConstant)* 
 
 EnumConstant
-    <- EnumConstantModifier* Identifier (LPAR ArgumentList? RPAR)? ClassBody? 
+    <- EnumConstantModifier* Identifier Arguments? ClassBody? 
 
 EnumConstantModifier
     <- Annotation 
 
 EnumBodyDeclarations
     <- SEMI ClassBodyDeclaration* 
+
 
 //=========================================================================
 //  JLS 9  Interfaces
@@ -860,7 +748,7 @@ InterfaceDeclaration
     
 
 NormalInterfaceDeclaration
-    <- InterfaceModifier* INTERFACE TypeIdentifier TypeParameters?
+    <- InterfaceModifier* INTERFACE Identifier TypeParameters?
           ExtendsInterfaces? InterfaceBody 
 
 InterfaceModifier
@@ -922,7 +810,7 @@ InterfaceMethodModifier
 //-------------------------------------------------------------------------
 
 AnnotationTypeDeclaration
-    <- InterfaceModifier* AT INTERFACE TypeIdentifier AnnotationTypeBody 
+    <- InterfaceModifier* AT INTERFACE Identifier AnnotationTypeBody 
 
 AnnotationTypeBody
     <- LWING AnnotationTypeMemberDeclaration* RWING 
@@ -936,7 +824,7 @@ AnnotationTypeMemberDeclaration
     
 
 AnnotationTypeElementDeclaration
-    <- AnnotationTypeElementModifier* UnannType Identifier LPAR RPAR Dims*
+    <- AnnotationTypeElementModifier* UnannType Identifier LPAR RPAR Dim*
          DefaultValue? SEMI 
 
 AnnotationTypeElementModifier
@@ -953,13 +841,15 @@ DefaultValue
 //-------------------------------------------------------------------------
 
 Annotation
-    <- NormalAnnotation
-    / SingleElementAnnotation
-    / MarkerAnnotation
+    <- AT
+      ( NormalAnnotation
+      / SingleElementAnnotation
+      / MarkerAnnotation
+      )
     
 
 NormalAnnotation
-    <- AT TypeName LPAR ElementValuePairList? RPAR 
+    <- QualIdent LPAR ElementValuePairList* RPAR 
 
 ElementValuePairList
     <- ElementValuePair (COMMA ElementValuePair)* 
@@ -980,10 +870,11 @@ ElementValueList
     <- ElementValue (COMMA ElementValue)* 
 
 MarkerAnnotation
-    <- AT TypeName 
+    <- QualIdent 
 
 SingleElementAnnotation
-    <- AT TypeName LPAR ElementValue RPAR 
+    <- QualIdent LPAR ElementValue RPAR 
+
 
 //=========================================================================
 //  JLS 10  Arrays
@@ -1025,12 +916,7 @@ LocalVariableDeclarationStatement
     <- LocalVariableDeclaration SEMI 
 
 LocalVariableDeclaration
-    <- VariableModifier* LocalVariableType VariableDeclaratorList 
-
-LocalVariableType
-    <- UnannType
-    / VAR
-    
+    <- VariableModifier* UnannType VariableDeclaratorList 
 
 //-------------------------------------------------------------------------
 //  JLS 14.5  Statements
@@ -1038,79 +924,44 @@ LocalVariableType
 
 Statement
     <- Block
-    / EmptyStatement
-    / ExpressionStatement
-    / AssertStatement
-    / SwitchStatement
-    / LabeledStatement
-    / IfThenElseStatement
-    / IfThenStatement
-    / WhileStatement
-    / ForStatement
-    / DoStatement
-    / BreakStatement
-    / ContinueStatement
-    / ReturnStatement
-    / SynchronizedStatement
-    / ThrowStatement
+    / IF ParExpression Statement (ELSE Statement)?
+    / BasicForStatement
+    / EnhancedForStatement
+    / WHILE ParExpression Statement
+    / DO Statement WHILE ParExpression SEMI
     / TryStatement
+    / SWITCH ParExpression SwitchBlock
+    / SYNCHRONIZED ParExpression Block
+    / RETURN Expression? SEMI
+    / THROW Expression SEMI
+    / BREAK Identifier? SEMI
+    / CONTINUE Identifier? SEMI
+    / ASSERT Expression (COLON Expression)? SEMI
+    / SEMI
+    / StatementExpression SEMI
+    / Identifier COLON Statement
     
-
-//-------------------------------------------------------------------------
-//  JLS 14.6  The Empty Statement
-//-------------------------------------------------------------------------
-
-EmptyStatement
-    <- SEMI 
-
-//-------------------------------------------------------------------------
-//  JLS 14.7  Labeled Statement
-//-------------------------------------------------------------------------
-
-LabeledStatement
-    <- Identifier COLON Statement 
 
 //-------------------------------------------------------------------------
 //  JLS 14.8  Expression Statements
+//
+//  Each of MethodInvocation and ClassInstanceCreationExpression
+//  can be a prefix of the other one. Until a solution is found,
+//  they are replaced by Primary.
 //-------------------------------------------------------------------------
-
-ExpressionStatement
-    <- StatementExpression SEMI 
 
 StatementExpression
     <- Assignment
-    / PreIncrementExpression
-    / PreDecrementExpression
-    / PostfixExpression
-    / MethodInvocation
-    / ClassInstanceCreationExpression
-    
-
-//-------------------------------------------------------------------------
-//  JLS 14.9  The If Statement
-//-------------------------------------------------------------------------
-
-IfThenStatement
-    <- IF LPAR Expression RPAR Statement 
-
-IfThenElseStatement
-    <- IF LPAR Expression RPAR Statement ELSE Statement 
-
-//-------------------------------------------------------------------------
-//  JLS 14.10  The Assert Statement
-//-------------------------------------------------------------------------
-
-AssertStatement
-    <- ASSERT Expression SEMI
-    / ASSERT Expression COLON Expression SEMI
+    / (INC / DEC)(Primary / QualIdent)
+    / (Primary / QualIdent)(INC / DEC)
+    / Primary
+//    / MethodInvocation
+//    / ClassInstanceCreationExpression
     
 
 //-------------------------------------------------------------------------
 //  JLS 14.11  The SWITCH Statement
 //-------------------------------------------------------------------------
-
-SwitchStatement
-    <- SWITCH LPAR Expression RPAR SwitchBlock 
 
 SwitchBlock
     <- LWING SwitchBlockStatementGroup* SwitchLabel* RWING 
@@ -1122,33 +973,16 @@ SwitchLabels
     <- SwitchLabel SwitchLabel* 
 
 SwitchLabel
-    <- CASE ConstantExpression COLON
-    / CASE Identifier COLON
+    <- CASE (ConstantExpression / EnumConstantName) COLON
     / DEFAULT COLON
     
 
-//-------------------------------------------------------------------------
-//  JLS 14.12  The WHILE Statement
-//-------------------------------------------------------------------------
-
-WhileStatement
-    <- WHILE LPAR Expression RPAR Statement 
-
-//-------------------------------------------------------------------------
-//  JLS 14.13  The DO Statement
-//-------------------------------------------------------------------------
-
-DoStatement
-    <- DO Statement WHILE LPAR Expression RPAR 
+EnumConstantName
+    <- Identifier 
 
 //-------------------------------------------------------------------------
 //  JLS 14.14  The FOR Statement
 //-------------------------------------------------------------------------
-
-ForStatement
-    <- BasicForStatement
-    / EnhancedForStatement
-    
 
 BasicForStatement
     <- FOR LPAR ForInit? SEMI Expression? SEMI ForUpdate? RPAR Statement 
@@ -1165,56 +999,19 @@ StatementExpressionList
     <- StatementExpression (COMMA  StatementExpression)* 
 
 EnhancedForStatement
-    <- FOR LPAR VariableModifier* LocalVariableType VariableDeclaratorId COLON
+    <- FOR LPAR VariableModifier* UnannType VariableDeclaratorId COLON
           Expression RPAR Statement 
-
-//-------------------------------------------------------------------------
-//  JLS 14.15  The BREAK Statement
-//-------------------------------------------------------------------------
-
-BreakStatement
-    <- BREAK Identifier? SEMI 
-
-//-------------------------------------------------------------------------
-//  JLS 14.16  The BREAK Statement
-//-------------------------------------------------------------------------
-
-ContinueStatement
-    <- CONTINUE Identifier? SEMI 
-
-//-------------------------------------------------------------------------
-//  JLS 14.17  The RETURN Statement
-//-------------------------------------------------------------------------
-
-ReturnStatement
-    <- RETURN Expression? SEMI 
-
-//-------------------------------------------------------------------------
-//  JLS 14.18  The THROW Statement
-//-------------------------------------------------------------------------
-
-ThrowStatement
-    <- THROW Expression SEMI 
-
-//-------------------------------------------------------------------------
-//  JLS 14.19  The SYNCHRONIZED Statement
-//-------------------------------------------------------------------------
-
-SynchronizedStatement
-    <- SYNCHRONIZED LPAR Expression RPAR Block 
 
 //-------------------------------------------------------------------------
 //  JLS 14.20  The TRY Statement
 //-------------------------------------------------------------------------
 
 TryStatement
-    <- TRY Block Catches? Finally
-    / TRY Block Catches
-    / TryWithResourcesStatement
+    <- TRY
+      ( Block (CatchClause* Finally / CatchClause+)
+      / ResourceSpecification Block CatchClause* Finally?
+      )
     
-
-Catches
-    <- CatchClause CatchClause* 
 
 CatchClause
     <- CATCH LPAR CatchFormalParameter RPAR Block 
@@ -1228,9 +1025,6 @@ CatchType
 Finally
     <- FINALLY Block 
 
-TryWithResourcesStatement
-    <- TRY ResourceSpecification Block Catches? Finally? 
-
 ResourceSpecification
     <- LPAR ResourceList SEMI? RPAR 
 
@@ -1238,14 +1032,8 @@ ResourceList
     <- Resource (SEMI Resource)* 
 
 Resource
-    <- VariableModifier* LocalVariableType Identifier EQU Expression
-    / VariableAccess
-    
+    <- VariableModifier* UnannType VariableDeclaratorId EQU Expression 
 
-VariableAccess
-    <- Name
-    / FieldAccess
-    
 
 //=========================================================================
 //  JLS 15  Expressions
@@ -1264,142 +1052,139 @@ Expression
 //-------------------------------------------------------------------------
 
 Primary
-    <- Literal
-    / ClassLiteral
-    / THIS
-    / TypeName DOT THIS
-    / LPAR Expression RPAR
-    / ClassInstanceCreationExpression
-    / ArrayOrFieldAccess
-    / MethodInvocation
-    / MethodReference
-    / ArrayCreationExpression
-    
+    <- PrimaryBase PrimaryRest* 
 
-ClassLiteral
-    <- TypeName (LBRK RBRK)* DOT CLASS
-    / NumericType (LBRK RBRK)* DOT CLASS
-    / BOOLEAN (LBRK RBRK)* DOT CLASS
+PrimaryBase
+    <- THIS
+    / Literal
+    / ParExpression
+    / SUPER
+      ( DOT TypeArguments? Identifier Arguments  // MethodInvocation
+      / DOT Identifier  // FieldAccess
+      / COLONCOLON TypeArguments? Identifier      // MethodReference
+      )
+    / NEW
+      ( ClassCreator  // Class creation
+      / ArrayCreator  // Array creation
+      )
+    / QualIdent
+      ( LBRK Expression RBRK // ArrayAccess
+      / Arguments  // MethodInvocation
+      / DOT
+        ( THIS
+        / NEW ClassCreator  // Class creation
+        / TypeArguments Identifier Arguments  // MethodInvocation
+        / SUPER DOT TypeArguments? Identifier Arguments  // MethodInvocation
+        / SUPER DOT Identifier // FieldAccess
+        / SUPER COLONCOLON TypeArguments? Identifier  // MethodReference
+        )
+      / (LBRK RBRK)* DOT CLASS
+      / COLONCOLON TypeArguments? Identifier  // MethodReference
+      )
     / VOID DOT CLASS
+    / BasicType (LBRK RBRK)* DOT CLASS
+    / ReferenceType COLONCOLON TypeArguments? Identifier  // MethodReference
+    / ClassType COLONCOLON TypeArguments? NEW  // MethodReference
+    / ArrayType COLONCOLON NEW  // MethodReference
     
 
+PrimaryRest
+    <- DOT
+      ( TypeArguments? Identifier Arguments  // MethodInvocation
+      / Identifier  // FieldAccess
+      / NEW ClassCreator  // Class creation
+      )
+    / LBRK Expression RBRK  // ArrayAccess
+    / COLONCOLON TypeArguments? Identifier  // MethodReference
+    
+
+ParExpression
+    <- LPAR Expression RPAR 
 
 //-------------------------------------------------------------------------
 //  JLS 15.9  Class Instance Creation Expressions
 //-------------------------------------------------------------------------
 
-ClassInstanceCreationExpression
-    <- Primary DOT UnqualifiedClassInstanceCreationExpression
-    / Name DOT UnqualifiedClassInstanceCreationExpression
-    / UnqualifiedClassInstanceCreationExpression
-    
+// ClassInstanceCreationExpression
+//     = NEW ClassCreator
+//     / Primary DOT NEW ClassCreator
+//     / QualIdent DOT NEW ClassCreator
+//     
 
-UnqualifiedClassInstanceCreationExpression
-    <- NEW TypeArguments? ClassOrInterfaceTypeToInstantiate LPAR ArgumentList* RPAR ClassBody? 
+ClassCreator
+    <- TypeArguments? Annotation* ClassTypeWithDiamond
+          Arguments ClassBody? 
 
-ClassOrInterfaceTypeToInstantiate
-    <- Annotation* Identifier TypeArgumentsOrDiamond? 
-        (DOT Annotation* Identifier TypeArgumentsOrDiamond?)* 
-    
+ClassTypeWithDiamond
+    <- Annotation* Identifier TypeArgumentsOrDiamond?
+          (DOT Annotation* Identifier TypeArgumentsOrDiamond?)* 
 
 TypeArgumentsOrDiamond
     <- TypeArguments
-    / LPOINT RPOINT &LPAR  // Must be last before LPAR
+    / LPOINT RPOINT !DOT  // Must be last
     
 
 //-------------------------------------------------------------------------
 //  JLS 15.10  Array Creation and Access Expressions
 //-------------------------------------------------------------------------
 
-ArrayCreationExpression
-    <- NEW PrimitiveType DimExprs Dims?
-    / NEW ClassType DimExprs Dims?
-    / NEW PrimitiveType Dims ArrayInitializer
-    / NEW ClassType Dims ArrayInitializer
+ArrayCreator
+    <- Type DimExpr+ Dim*
+    / Type Dim+ ArrayInitializer
     
-
-DimExprs
-    <- DimExpr DimExpr* 
 
 DimExpr
     <- Annotation* LBRK Expression RBRK 
 
-// ArrayAccess                       // Is embedded in ArrayOrFieldAccess
+// ArrayAccess
 //    = Primary LBRK Expression RBRK
-//    / Name LBRK Expression RBRK
+//    / QualIdent LBRK Expression RBRK
+//    
+
+//-------------------------------------------------------------------------
+//  JLS 15.11  Field Access Expressions
+//-------------------------------------------------------------------------
+
+// FieldAccess
+//    = Primary DOT Identifier
+//    / SUPER DOT Identifier
+//    / QualIdent DOT SUPER DOT Identifier
 //    
 
 //-------------------------------------------------------------------------
 //  JLS 15.12  Method Invocation Expressions
 //-------------------------------------------------------------------------
 
-MethodInvocation
-    <- Primary DOT TypeArguments? Identifier LPAR ArgumentList? RPAR
-    / Name DOT TypeArguments Identifier LPAR ArgumentList? RPAR
-    / Name LPAR ArgumentList? RPAR
-    / SUPER DOT TypeArguments? Identifier LPAR ArgumentList? RPAR
-    / TypeName DOT SUPER DOT TypeArguments? Identifier LPAR ArgumentList? RPAR
-    
+// MethodInvocation
+//     = QualIdent Arguments
+//     / Primary DOT TypeArguments? Identifier Arguments
+//     / QualIdent DOT TypeArguments Identifier Arguments
+//     / SUPER DOT TypeArguments? Identifier Arguments
+//     / QualIdent DOT SUPER DOT TypeArguments? Identifier Arguments
+//     
+
+Arguments
+    <- LPAR ArgumentList? RPAR 
 
 ArgumentList
     <- Expression (COMMA Expression)* 
-
-//-------------------------------------------------------------------------
-//  JLS 15.11  Field Access Expressions
-//-------------------------------------------------------------------------
-
-FieldAccess
-    <- Primary DOT Identifier
-    / SUPER DOT Identifier
-    / TypeName DOT SUPER DOT Identifier
-    
-
-//-------------------------------------------------------------------------
-//  JLS 15.13  Method Reference Expression
-//-------------------------------------------------------------------------
-
-MethodReference
-    <- Primary COLONCOLON TypeArguments?  Identifier
-    / Name COLONCOLON TypeArguments?  Identifier
-    / ReferenceType COLONCOLON TypeArguments?  Identifier
-    / SUPER COLONCOLON TypeArguments?  Identifier
-    / TypeName DOT SUPER COLONCOLON TypeArguments?  Identifier
-    / ArrayType COLONCOLON NEW
-    / ClassType COLONCOLON TypeArguments?  NEW
-    
-
-//-------------------------------------------------------------------------
-//  JLS 15.14  Postfix Expressions
-//-------------------------------------------------------------------------
-
-PostfixExpression
-    <- Primary (INC / DEC)?
-    / Name (INC / DEC)?
-    
 
 //-------------------------------------------------------------------------
 //  JLS 15.15  Unary Operators
 //-------------------------------------------------------------------------
 
 UnaryExpression
-    <- PreIncrementExpression
-    / PreDecrementExpression
+    <- (INC / DEC)(Primary / QualIdent)
     / PLUS UnaryExpression
     / MINUS UnaryExpression
     / UnaryExpressionNotPlusMinus
     
 
-PreIncrementExpression
-    <- INC UnaryExpression 
-
-PreDecrementExpression
-    <- DEC UnaryExpression 
-
 UnaryExpressionNotPlusMinus
-    <- CastExpression
-    / PostfixExpression
-    / TILDE UnaryExpression
+    <- TILDE UnaryExpression
     / BANG UnaryExpression
+    / CastExpression
+    / (Primary / QualIdent) (INC / DEC)?
     
 
 //-------------------------------------------------------------------------
@@ -1407,9 +1192,9 @@ UnaryExpressionNotPlusMinus
 //-------------------------------------------------------------------------
 
 CastExpression
-    <- LPAR ReferenceType AdditionalBound* RPAR LambdaExpression
+    <- LPAR PrimitiveType RPAR UnaryExpression
+    / LPAR ReferenceType AdditionalBound* RPAR LambdaExpression
     / LPAR ReferenceType AdditionalBound* RPAR UnaryExpressionNotPlusMinus
-    / LPAR PrimitiveType RPAR UnaryExpression
     
 
 //-------------------------------------------------------------------------
@@ -1447,12 +1232,14 @@ InfixOperator
 //-------------------------------------------------------------------------
 
 ConditionalExpression
-    <- InfixExpression QUERY Expression COLON (LambdaExpression / ConditionalExpression)
-    / InfixExpression
-    
+    <- InfixExpression (QUERY Expression COLON Expression)* 
 
 //-------------------------------------------------------------------------
 //  JLS 15.26  Assignment Operators
+//
+//  Each of ArrayAccess and FieldAccess in LeftHandSide
+//  can be a prefix of the other one.
+//  Until a solution is found, they are replaced by Primary.
 //-------------------------------------------------------------------------
 
 AssignmentExpression
@@ -1464,18 +1251,10 @@ Assignment
     <- LeftHandSide AssignmentOperator Expression 
 
 LeftHandSide
-    <- ArrayOrFieldAccess
-    / Name
-    / LPAR LeftHandSide RPAR
-    
-
-ArrayOrFieldAccess
+//    = ArrayAccess
+//    / FieldAccess
     <- Primary
-      ( LBRK Expression RBRK            // From ArrayAccess
-      /  DOT Identifier)                // From FieldAccess
-    / Name LBRK Expression RBRK         // From ArrayAccess
-    / SUPER DOT Identifier              // From FieldAccess
-    / TypeName DOT SUPER DOT Identifier // From FieldAccess
+    / QualIdent
     
 
 AssignmentOperator
@@ -1501,24 +1280,13 @@ LambdaExpression
     <- LambdaParameters ARROW LambdaBody 
 
 LambdaParameters
-    <- LPAR LambdaParameterList? RPAR
-    / Identifier
+    <- Identifier
+    / LPAR FormalParameterList? RPAR
+    / LPAR InferredFormalParameterList RPAR
     
 
-LambdaParameterList
-    <- LambdaParameter (COMMA LambdaParameter)*
-    / Identifier (COMMA Identifier)*
-    
-
-LambdaParameter
-    <- VariableModifier* LambdaParameterType VariableDeclaratorId
-    / VariableArityParameter !COMMA
-    
-
-LambdaParameterType
-    <- UnannType
-    / VAR
-    
+InferredFormalParameterList
+    <- Identifier (COMMA Identifier)* 
 
 LambdaBody
     <- Expression
