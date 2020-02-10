@@ -308,6 +308,15 @@ The sample grammars provided are:
   - `examples/es5.arborist`
   - Simple style grammar; run arborist in `simple` mode
   - Example run: `./arborist -m simple -r -t -g examples/es5.arborist examples/es5_example_hello_world.js`
+- Java 8
+  - `examples/java8.arborist`
+  - Simple style grammar; run arborist in `simple` mode
+  - Example run: 
+    ```
+    ~/projects/arborist ❯ ./arborist -m simple -r -t -g examples/java8.arborist examples/java_example_spring_application.java
+    timings: load grammar = 00:00:00.785107000 ; parse = 00:00:01.738307000
+    Input conforms to grammar.
+    ```
 
 The following couple of examples demonstrate how to use the sample grammars:
 
