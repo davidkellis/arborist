@@ -287,7 +287,7 @@ describe Arborist do
         m.match("a(b(c,d),f(g,h))", "e").try(&.simple_s_exp).should eq "(e (e a) ( (e (e b) ( (e c) , (e d) )) , (e (e f) ( (e g) , (e h) )) ))"
       end
 
-      it "correctly recognizes multiple left recursive alternatives" do
+      it "correctly recognizes multiple left recursive alternatives and yields left-associative parse" do
         e = choice(
           seq(apply("e"), term("."), apply("e")),
           seq(apply("e"), term("("), star(seq(apply("e"), opt(term(","))) ), term(")")),
