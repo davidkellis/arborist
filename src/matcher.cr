@@ -32,7 +32,7 @@ module Arborist
     getter input : CharArray
     property pos : Int32
     getter rules : Hash(String, Rule)
-    property growing : Hash(Rule, Hash(Int32, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
+    property growing : Hash(Int32, Hash(Rule, ParseTree?))   # growing is a map <R -> <P -> seed >> from rules to maps of input positions to seeds at that input position. This is used to record the ongoing growth of a seed for a rule R at input position P.
     property expr_failures : Hash(Int32, Set(MatchFailure))
     property expr_call_tree_controller : ExprCallTreeController
 
@@ -41,7 +41,7 @@ module Arborist
       @rules = rules
 
       # these structures are necessary for handling left recursion
-      @growing = {} of Rule => Hash(Int32, ParseTree?)
+      @growing = {} of Int32 => Hash(Rule, ParseTree?)
       @expr_failures = {} of Int32 => Set(MatchFailure)
       @expr_call_tree_controller = ExprCallTreeController.new
 
@@ -125,17 +125,65 @@ module Arborist
       add_skip_rule_if_necessary
 
       # the next 4 lines implement line 1 of Algorithm 2 from https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
-      @growing = {} of Rule => Hash(Int32, ParseTree?)
-      @rules.each_value do |rule|
-        initialize_seed_growing_hash_for_rule(rule)
-      end
+      @growing = {} of Int32 => Hash(Rule, ParseTree?)
+      # @rules.each_value do |rule|
+      #   initialize_seed_growing_hash_for_rule(rule)
+      # end
 
       @expr_failures = {} of Int32 => Set(MatchFailure)
       @expr_call_tree_controller.reset
     end
 
-    def initialize_seed_growing_hash_for_rule(rule)
-      @growing[rule] = {} of Int32 => ParseTree?
+    # def initialize_seed_growing_hash_for_rule(rule)
+    #   @growing[rule] = {} of Int32 => ParseTree?
+    # end
+
+    def mark_parent_seed_growths_as_resulting_in_deeper_seed_growth(child_seed_growth_rule_application)
+      apply_calls_that_resulted_in_left_recursion.
+        select {|apply_call| apply_call != child_seed_growth_rule_application }.
+        each(&.resulted_in_deeper_level_seed_growth!)
+    end
+
+    # this removes all "descendant" seeds that were used to grow a larger seed, <larger_seed>, that encompases all the descendant seeds
+    def remove_seeds_used_to_grow_larger_seed(rule, larger_seed : ParseTree)
+      remove_seeds_to_the_right_of(larger_seed.start_pos)
+    end
+
+    # remove all seeds of any rule in the range [start_pos, end_pos]
+    def remove_seeds_between(start_pos, end_pos)
+      (start_pos..end_pos).each do |pos|
+        @growing.delete(pos)
+      end
+    end
+
+    # remove all seeds of any rule in the range (start_pos, <end of input string>]
+    def remove_seeds_to_the_right_of(start_pos)
+      remove_seeds_between(start_pos + 1, @input.size - 1)
+    end
+
+    def get_seed(rule : Rule, pos : Int32)
+      @growing[pos][rule]
+    end
+
+    def get_seed?(rule : Rule, pos : Int32) : ParseTree?
+      @growing[pos]?.try(&.[rule]?)
+    end
+
+    def seed_defined?(rule : Rule, pos : Int32)
+      # @growing.has_key?(rule) && @growing[rule].has_key?(pos)
+      @growing.has_key?(pos) && @growing[pos].has_key?(rule)
+    end
+
+    # todo: decide whether this should return the previous seed value
+    def set_seed(rule : Rule, pos : Int32, seed_parse_tree : ParseTree?) : ParseTree?
+      @growing[pos] ||= {} of Rule => ParseTree?
+      # previous_value = @growing[pos][rule]?
+      @growing[pos][rule] = seed_parse_tree
+      # previous_value
+    end
+
+    def remove_seed(rule : Rule, pos : Int32)
+      @growing[pos]?.try(&.delete(rule))
     end
 
     def add_skip_rule_if_necessary
@@ -275,9 +323,9 @@ module Arborist
       @expr_call_tree_controller.lookup_oldest_rule_application_that_resulted_in_left_recursion(rule)
     end
 
-    def left_recursive_apply_calls : Array(ApplyCall)
-      @expr_call_tree_controller.left_recursive_apply_calls
-    end
+    # def left_recursive_apply_calls : Array(ApplyCall)
+    #   @expr_call_tree_controller.left_recursive_apply_calls
+    # end
 
     def apply_calls_that_resulted_in_left_recursion : Array(ApplyCall)
       @expr_call_tree_controller.apply_calls_that_resulted_in_left_recursion
@@ -325,7 +373,7 @@ module Arborist
       unless @rules.has_key?(rule_name)
         add_rule(rule_name, expr)
         new_rule = get_rule(rule_name)
-        initialize_seed_growing_hash_for_rule(new_rule)
+        # initialize_seed_growing_hash_for_rule(new_rule)
       end
     end
 

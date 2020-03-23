@@ -200,7 +200,9 @@ describe Arborist do
       e = choice(seq(apply("e"), term("-"), apply("e")), term("5"))    # e -> e - e | 5
       m1 = Matcher.new.add_rule("e", e)
 
+      # Arborist::GlobalDebug.enable!
       m1.match("5-5-5", "e").try(&.syntax_tree).should eq [["5", "-", "5"], "-", "5"]   # should parse as (((5)-5)-5)
+      # Arborist::GlobalDebug.disable!
       m1.match("5-5-5-5-5", "e").try(&.syntax_tree).should eq [[[["5", "-", "5"], "-", "5"], "-", "5"], "-", "5"]   # should parse as (((((5)-5)-5)-5)-5)
     end
 
@@ -263,6 +265,55 @@ describe Arborist do
     end
 
     describe "handles left recursion edge cases" do
+      it "correctly recognizes `a(b,c(d,e))` with grammar: e -> e '(' e ',' e ')' / a-z" do
+        e = choice(
+          seq(apply("e"), term("("), apply("e"), term(","), apply("e"), term(")")),
+          plus(range('a'..'z'))
+        )
+        m = Matcher.new.add_rule("e", e)
+
+        # Arborist::GlobalDebug.enable!
+        # pt = m.match("foo", "e")
+        # Arborist::GlobalDebug.disable!
+        # m.print_match_failure_error unless pt
+        # pt.try(&.simple_s_exp).should_not be_nil
+
+        m.match("foo", "e").try(&.simple_s_exp).should eq "(e f o o)"
+        m.match("foo(abc,qux)", "e").try(&.simple_s_exp).should eq "(e (e f o o) ( (e a b c) , (e q u x) ))"
+        # Arborist::GlobalDebug.enable!
+        m.match("a(b(c,d),e)", "e").try(&.simple_s_exp).should eq "(e (e a) ( (e (e b) ( (e c) , (e d) )) , (e e) ))"
+        # Arborist::GlobalDebug.disable!
+        m.match("a(b,c(d,e))", "e").try(&.simple_s_exp).should eq "(e (e a) ( (e b) , (e (e c) ( (e d) , (e e) )) ))"
+        m.match("a(b(c,d),f(g,h))", "e").try(&.simple_s_exp).should eq "(e (e a) ( (e (e b) ( (e c) , (e d) )) , (e (e f) ( (e g) , (e h) )) ))"
+      end
+
+      it "correctly recognizes multiple left recursive alternatives" do
+        e = choice(
+          seq(apply("e"), term("."), apply("e")),
+          seq(apply("e"), term("("), star(seq(apply("e"), opt(term(","))) ), term(")")),
+          plus(range('a'..'z')),
+          plus(range('0'..'9'))
+        )
+        m = Matcher.new.add_rule("e", e)
+
+        # Arborist::GlobalDebug.enable!
+        # pt = m.match("foo", "e")
+        # Arborist::GlobalDebug.disable!
+        # m.print_match_failure_error unless pt
+        # pt.try(&.simple_s_exp).should_not be_nil
+
+        (pt = m.match("foo", "e")).try(&.simple_s_exp).should_not be_nil
+        (pt = m.match("foo()", "e")).try(&.simple_s_exp).should_not be_nil
+        (pt = m.match("foo().bar", "e")).try(&.simple_s_exp).should_not be_nil
+        (pt = m.match("foo().bar.baz(123)", "e")).try(&.simple_s_exp).should_not be_nil
+        (pt = m.match("foo().bar.baz(123,qux)", "e")).try(&.simple_s_exp).should_not be_nil
+        # Arborist::GlobalDebug.enable!
+        (pt = m.match("a(b,c(d))", "e")).try(&.simple_s_exp).should_not be_nil
+        # Arborist::GlobalDebug.disable!
+        (pt = m.match("foo().bar.baz(123,qux(456))", "e")).try(&.simple_s_exp).should_not be_nil
+        (pt = m.match("foo().bar.baz(123,qux(456).quux(789).oof)", "e")).try(&.simple_s_exp).should_not be_nil
+      end
+
       it "correctly recognizes `(1+2)` with grammar: e -> e + e / '(' e ')' / 1 / 2" do
         e = choice(
           seq(apply("e"), term("+"), apply("e")),

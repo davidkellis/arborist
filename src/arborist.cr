@@ -115,7 +115,7 @@ module Arborist
     property seed_parse_tree : ParseTree?
     property resulted_in_left_recursion : Bool
     property safe_to_memoize : Bool
-    property parent_of_recursive_call : ApplyCall?    # this is the parent-recursive application of the rule with the same name as this ApplyCall
+    property parent_of_recursive_call : ApplyCall?    # this is the parent-recursive application of the rule with the same name as this ApplyCall, but not necessarily at the same input position
     property child_recursive_calls : Set(ApplyCall)
     property grew_seed_maximally : Bool
 
@@ -137,6 +137,19 @@ module Arborist
       @parent_of_recursive_call = nil
       @child_recursive_calls = Set(ApplyCall).new
       @grew_seed_maximally = false
+      @resulted_in_deeper_level_seed_growth = false
+    end
+
+    def has_not_yet_resulted_in_lower_level_seed_growth!
+      @resulted_in_deeper_level_seed_growth = false
+    end
+
+    def resulted_in_deeper_level_seed_growth!
+      @resulted_in_deeper_level_seed_growth = true
+    end
+
+    def resulted_in_deeper_level_seed_growth?
+      @resulted_in_deeper_level_seed_growth
     end
 
     def grew_seed_maximally!
@@ -190,7 +203,7 @@ module Arborist
       parent_of_recursive_call_should_recursive_application_grow_maximally = parent_of_recursive_call && parent_of_recursive_call.should_recursive_application_grow_maximally?(self)
 
       should_grow_seed_maximally = resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
-        (parent_of_recursive_call.nil? ||
+        (parent_of_recursive_call.nil? ||                          # and either there is no parent recursive call or the parent recursive call indicates this call should grow maximally 
          parent_of_recursive_call_should_recursive_application_grow_maximally )
 
       # should_grow_seed_maximally = resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
@@ -306,8 +319,8 @@ module Arborist
       rule.expr.preorder_traverse(matcher, visit, visited_nodes)
     end
 
-    # this implements Tratt's Algorithm 2 in section 6.4 of https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
-    def eval(matcher) : ParseTree?   # line 3 of Algorithm 2
+    # this started out as an implementation of Tratt's Algorithm 2 in section 6.4 of https://tratt.net/laurie/research/pubs/html/tratt__direct_left_recursive_parsing_expression_grammars/
+    def eval(matcher) : ParseTree?
       GlobalDebug.increment
 
       rule = matcher.get_rule(@rule_name)
@@ -367,7 +380,7 @@ module Arborist
           # ???
 
           # return seed
-          seed_parse_tree = matcher.growing[rule][pos]
+          seed_parse_tree = matcher.get_seed(rule, pos)
           if seed_parse_tree
             matcher.pos = seed_parse_tree.finishing_pos + 1
           else
@@ -416,16 +429,146 @@ module Arborist
           # at each level to grow maximally, and the remaining instances of recursion occurring to the right to grow minimally such that the expression
           # they are a part of will succeed.
 
-          matcher.growing[rule][pos] = nil
+          # zero seed out if the seed is undefined
+          matcher.set_seed(rule, pos, nil) unless matcher.seed_defined?(rule, pos)
           full_grown_seed_to_return = nil
           current_rule_application.set_resulted_in_left_recursion(false)    # this may not even be necessary since the initial value is false
 
           GlobalDebug.puts "starting seed growth for rule #{rule.name} at #{pos} (call #{current_rule_application.object_id})"
+          seed_has_grown_at_all = false
           while true
             current_rule_application.remove_all_child_recursive_calls
 
+            previous_seed = matcher.get_seed(rule, pos)
+
+            current_rule_application.has_not_yet_resulted_in_lower_level_seed_growth!
+
             matcher.pos = pos
-            parse_tree = rule.expr.eval(matcher)    # apply the rule
+            parse_tree = rule.expr.eval(matcher)        # apply the rule
+
+
+            should_grow_seed = current_rule_application.resulted_in_left_recursion?     # we only care about growing a seed if this rule application resulted in left recursion
+            if should_grow_seed
+              this_seed_grew = parse_tree_is_larger_than_seed_parse_tree?(parse_tree, previous_seed)
+              if this_seed_grew
+                GlobalDebug.puts "seed grew: #{rule.name} at #{pos} : '#{parse_tree.try(&.simple_s_exp) || "nil"}'"
+                matcher.set_seed(rule, pos, parse_tree)
+                matcher.mark_parent_seed_growths_as_resulting_in_deeper_seed_growth(current_rule_application)
+
+
+                # since the seed grew, we need to decide whether it should continue to grow
+                if current_rule_application.should_grow_seed_maximally?
+                  seed_cannot_grow_any_more = matcher.eof?
+                  if seed_cannot_grow_any_more
+                    current_rule_application.grew_seed_maximally!
+                    GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos} (call #{current_rule_application.object_id}); consumed all input"
+                    full_grown_seed_to_return = parse_tree
+                    if full_grown_seed_to_return
+                      matcher.pos = full_grown_seed_to_return.finishing_pos + 1
+                    else
+                      matcher.pos = pos
+                    end
+                    break
+                  else
+                    GlobalDebug.puts "continue to maximally grow seed for #{rule.name} at #{pos} (call #{current_rule_application.object_id}); pos = #{matcher.pos} ; input size = #{matcher.input.size}"
+                    # we wish to grow the seed some more, so continue looping
+                  end
+                else
+                  GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos} (call #{current_rule_application.object_id}); should not grow maximally"
+                  current_rule_application.not_safe_to_memoize!   # not safe to memoize if we are artificially limiting its growth
+                  full_grown_seed_to_return = parse_tree
+                  if full_grown_seed_to_return
+                    matcher.pos = full_grown_seed_to_return.finishing_pos + 1
+                  else
+                    matcher.pos = pos
+                  end
+                  break
+                end
+
+              else
+                if current_rule_application.resulted_in_deeper_level_seed_growth?
+                  GlobalDebug.puts "seed growth failed but seems promising; retrying seed growth for rule #{rule.name} at #{pos} (call #{current_rule_application.object_id})"
+                  next
+                end
+
+
+                # if we make it here, the seed cannot grow any further, so we need to return the largest seed, i.e. we need to return previous_seed
+                current_rule_application.grew_seed_maximally!
+                GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos} (call #{current_rule_application.object_id}); cannot grow any further"
+                full_grown_seed_to_return = previous_seed
+                if full_grown_seed_to_return
+                  matcher.pos = full_grown_seed_to_return.finishing_pos + 1
+                else
+                  matcher.pos = pos
+                end
+                break
+
+              end
+
+
+
+
+
+
+              # if parse_tree
+              #   matcher.set_seed(rule, pos, parse_tree)
+              #   this_seed_grew = parse_tree_is_larger_than_seed_parse_tree?(parse_tree, previous_seed)      # originally: `parse_tree != previous_seed`
+              #   matcher.mark_parent_seed_growths_as_resulting_in_deeper_seed_growth(current_rule_application) if this_seed_grew
+              #   seed_has_grown_at_all = true
+              #   # matcher.remove_seeds_used_to_grow_larger_seed(current_rule_application, parse_tree)
+              # else
+              #   if !seed_has_grown_at_all && current_rule_application.resulted_in_deeper_level_seed_growth?
+              #     GlobalDebug.puts "seed growth failed but seems promising; retrying seed growth for rule #{rule.name} at #{pos} (call #{current_rule_application.object_id})"
+              #     next
+              #   end
+              # end
+
+              # # once we make it to this point, the seed has either:
+              # # 1. still not grown, and has no hope of growing; we need to fail
+              # # 2. grown minimally, from nothing to something, from nil to a ParseTree object; do we want to continue growing the seed?
+
+              # # this covers case (1)
+              # if !seed_has_grown_at_all
+              #   GlobalDebug.puts "seed growth failure for rule #{rule.name} at #{pos} (call #{current_rule_application.object_id})"
+              #   full_grown_seed_to_return = parse_tree
+              #   break
+              # end
+
+              # # this covers case (2)
+              # # todo: resume working on this block of logic
+              # should_grow_the_seed_more = current_rule_application.should_grow_seed_maximally?
+              # if should_grow_the_seed_more
+              #   seed_parse_tree = previous_seed
+              #   GlobalDebug.puts "candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.simple_s_exp) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.simple_s_exp) || "nil"}'"
+              #   this_seed_grew = parse_tree_is_larger_than_seed_parse_tree?(parse_tree, previous_seed)      # originally: `parse_tree != previous_seed`
+              #   if !this_seed_grew     # we're done growing the seed; it can't grow any further
+              #     GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos}"
+              #     full_grown_seed_to_return = seed_parse_tree
+              #     current_rule_application.grew_seed_maximally!
+              #     if seed_parse_tree
+              #       matcher.pos = seed_parse_tree.finishing_pos + 1
+              #     else
+              #       matcher.pos = pos
+              #     end
+              #     break
+              #   end
+              # else
+              #   full_grown_seed_to_return = parse_tree
+              #   break
+              # end
+
+            else
+              full_grown_seed_to_return = parse_tree
+              if full_grown_seed_to_return
+                matcher.pos = full_grown_seed_to_return.finishing_pos + 1
+              else
+                matcher.pos = pos
+              end
+              break
+            end
+
+
+
 
             # oldest_application_resulting_in_left_recursion = matcher.lookup_oldest_rule_application_that_resulted_in_left_recursion(rule)
 
@@ -456,48 +599,37 @@ module Arborist
             # fails: `a,b=1,1+2+1` with grammar: e -> id, id = e, e / add / 1 / 2 ; add -> e + e ; id -> a / b      ; fails to recognize at all
               
             # candidate condition 4:
-            # We want to ensure that <child_rule_application> only grows maximally if it is the left-most application
-            # occurring at this recursion level (i.e. as a child-recursion of <self>) that has not already grown maximally.
-            # There may be prior child-recursive calls appearing to the left of <child_rule_application>, but those prior
-            # child-recursive calls must be completely finished growing.
-            #   @child_recursive_calls.includes?(child_rule_application) && 
-            #     @child_recursive_calls.select {|apply_call| !apply_call.grew_seed_maximally? }.size == 1
-            # should_grow_seed = current_rule_application.resulted_in_left_recursion? &&  # we only want to grow the seed bottom up if this application spawned a left-recursive apply call
-            #   (parent_application_of_same_rule.nil? ||
-            #    parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application) )
-            should_grow_seed = current_rule_application.should_grow_seed_maximally?
+            # should_grow_seed_maximally = current_rule_application.should_grow_seed_maximally?
+            # if should_grow_seed_maximally
+            #   seed_parse_tree = previous_seed
+            #   GlobalDebug.puts "candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.simple_s_exp) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.simple_s_exp) || "nil"}'"
+            #   if parse_tree_is_no_larger_than_seed_parse_tree?(parse_tree, seed_parse_tree)     # we're done growing the seed; it can't grow any further
+            #     GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos}"
+            #     full_grown_seed_to_return = seed_parse_tree
+            #     current_rule_application.grew_seed_maximally!
+            #     if seed_parse_tree
+            #       matcher.pos = seed_parse_tree.finishing_pos + 1
+            #     else
+            #       matcher.pos = pos
+            #     end
+            #     break
+            #   end
+            # else
+            #   full_grown_seed_to_return = parse_tree
+            #   break
+            # end
 
-            # GlobalDebug.puts "should grow seed? (#{should_grow_seed}) #{current_rule_application.resulted_in_left_recursion?} && ( #{parent_application_of_same_rule.nil?} || #{parent_application_of_same_rule && parent_application_of_same_rule.should_recursive_application_grow_maximally?(current_rule_application)}===(#{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.includes?(current_rule_application)} && #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.size } == 1) )"
-            # GlobalDebug.puts "|-> (call #{parent_application_of_same_rule.object_id}).child_recursive_calls = #{parent_application_of_same_rule && parent_application_of_same_rule.child_recursive_calls.map(&.object_id) }"
-
-            if should_grow_seed
-              seed_parse_tree = matcher.growing[rule][pos]
-              GlobalDebug.puts "candidate seed for #{rule.name} at #{pos} : parse_tree = '#{parse_tree.try(&.simple_s_exp) || "nil"}' ; seed_parse_tree = '#{seed_parse_tree.try(&.simple_s_exp) || "nil"}'"
-              if parse_tree.nil? || (seed_parse_tree && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)   # we're done growing the seed; it can't grow any further
-                GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos}"
-                full_grown_seed_to_return = seed_parse_tree
-                current_rule_application.grew_seed_maximally!
-                if seed_parse_tree
-                  matcher.pos = seed_parse_tree.finishing_pos + 1
-                else
-                  matcher.pos = pos
-                end
-                break
-              end
-            else
-              full_grown_seed_to_return = parse_tree
-              break
-            end
-
-            GlobalDebug.puts "grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.simple_s_exp) || "nil"}'"
-            matcher.growing[rule][pos] = parse_tree                         # line 25 of Algorithm 2
-          end
+            # GlobalDebug.puts "grow seed #{rule.name} at #{pos} : '#{parse_tree.try(&.simple_s_exp) || "nil"}'"
+            # matcher.set_seed(rule, pos, parse_tree)
+          end  # end of while loop
 
           # may need to change this to delete this seed and all other seeds that have grown at positions >= to pos, but only if this is the root apply call that started all the other seed growths
-          matcher.growing[rule].delete(pos)
+          # matcher.remove_seed(rule, pos)
+          # matcher.remove_seeds_to_the_right_of(full_grown_seed_to_return.start_pos) if full_grown_seed_to_return      # todo: not sure about this; I think this is incorrect
+
           GlobalDebug.puts "finishing seed growth for rule #{rule.name} at #{pos} : '#{full_grown_seed_to_return.try(&.simple_s_exp) || "nil"}'"
           full_grown_seed_to_return
-        end                                                                 # line 35 of Algorithm 2
+        end
 
         popped_apply_call = pop_rule_application(matcher, !!parse_tree_from_rule_expr)
 
@@ -515,14 +647,27 @@ module Arborist
         # trees resulting from rule applications within the same context may be memoized and read from the memoization cache, but once
         # the context changes, then any reads must be taken from the part of the cache that corresponds to the rule-in-recursion stack state
         # at which the rule application is being made.
-        matcher.memoize_result(pos, matcher.pos, rule, apply_parse_tree) if popped_apply_call.safe_to_memoize?
+        if popped_apply_call.safe_to_memoize?
+          matcher.memoize_result(pos, matcher.pos, rule, apply_parse_tree)
+
+          # once we memoize, it's safe to clean up the seeds
+          matcher.remove_seed(rule, pos)
+        end
 
         apply_parse_tree
       end
 
       GlobalDebug.decrement
       top_level_return_parse_tree
-    end                                                                   # line 36 of Algorithm 2
+    end
+
+    def parse_tree_is_larger_than_seed_parse_tree?(parse_tree : ParseTree?, seed_parse_tree : ParseTree?) : Bool
+      !parse_tree.nil? && (seed_parse_tree.nil? || parse_tree.finishing_pos > seed_parse_tree.finishing_pos)
+    end
+
+    # def parse_tree_is_no_larger_than_seed_parse_tree?(parse_tree : ParseTree?, seed_parse_tree : ParseTree?) : Bool
+    #   parse_tree.nil? || (!seed_parse_tree.nil? && parse_tree.finishing_pos <= seed_parse_tree.finishing_pos)
+    # end
 
     def push_rule_application(matcher, rule, pos, is_this_application_left_recursive_at_pos)
       current_rule_application = ApplyCall.new(self, rule, pos, is_this_application_left_recursive_at_pos)
@@ -723,6 +868,7 @@ module Arborist
       @exps.each {|expr| expr.preorder_traverse(matcher, visit, visited_nodes) }
     end
 
+    # def eval(matcher, retry_on_failure_if_seed_grew : Bool) : ParseTree?
     def eval(matcher) : ParseTree?
       matcher.push_onto_call_stack(ChoiceCall.new(self, matcher.pos))
 
@@ -733,6 +879,14 @@ module Arborist
       @exps.reject {|expr| expr.is_a?(PosLookAhead) || expr.is_a?(NegLookAhead) }.each do |expr|
         matcher.pos = orig_pos
         parse_tree = expr.eval(matcher)
+        # while true
+        #   parse_tree = expr.eval(matcher)
+        #   if retry_on_failure_if_seed_grew && parse_tree.nil?
+            
+        #   else
+        #     break
+        #   end
+        # end
         if parse_tree
           matcher.pop_off_of_call_stack(true)
           GlobalDebug.puts "matched choice(#{expr.to_s}) => #{parse_tree.simple_s_exp} at #{orig_pos}"

@@ -268,9 +268,9 @@ module Arborist
       apply_calls_in_call_stack.select(&.resulted_in_left_recursion?)
     end
 
-    def left_recursive_apply_calls : Array(ApplyCall)
-      apply_calls_in_call_stack.select(&.left_recursive?)
-    end
+    # def left_recursive_apply_calls : Array(ApplyCall)
+    #   apply_calls_in_call_stack.select(&.left_recursive?)
+    # end
 
     def lookup_rule_application_in_call_stack(rule : Rule, pos : Int32) : ApplyCall?
       @apply_calls_per_rule_and_pos[{rule, pos}]?.try(&.last?)
