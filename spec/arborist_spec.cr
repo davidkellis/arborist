@@ -290,7 +290,10 @@ describe Arborist do
       it "correctly recognizes multiple left recursive alternatives and yields left-associative parse" do
         e = choice(
           seq(apply("e"), term("."), apply("e")),
-          seq(apply("e"), term("("), star(seq(apply("e"), opt(term(","))) ), term(")")),
+          seq(apply("e"),
+              term("("),
+              opt(seq(apply("e"), star(seq(term(","), apply("e"))) )),
+              term(")")),
           plus(range('a'..'z')),
           plus(range('0'..'9'))
         )
@@ -311,7 +314,8 @@ describe Arborist do
         (pt = m.match("a(b,c(d))", "e")).try(&.simple_s_exp).should_not be_nil
         # Arborist::GlobalDebug.disable!
         (pt = m.match("foo().bar.baz(123,qux(456))", "e")).try(&.simple_s_exp).should_not be_nil
-        (pt = m.match("foo().bar.baz(123,qux(456).quux(789).oof)", "e")).try(&.simple_s_exp).should_not be_nil
+        (pt = m.match("foo().bar.baz(123,qux(456).quux(789).oof)", "e")).try(&.simple_s_exp).should eq("(e (e (e (e (e f o o) ( )) . (e b a r)) . (e b a z)) ( (e 1 2 3) , (e (e (e (e (e q u x) ( (e 4 5 6) )) . (e q u u x)) ( (e 7 8 9) )) . (e o o f)) ))")
+        (pt = m.match("a(b).e(f())", "e")).try(&.simple_s_exp).should eq "(e (e (e (e a) ( (e b) )) . (e e)) ( (e (e f) ( )) ))"
       end
 
       it "correctly recognizes `(1+2)` with grammar: e -> e + e / '(' e ')' / 1 / 2" do

@@ -451,6 +451,7 @@ module Arborist
             if should_grow_seed
               this_seed_grew = parse_tree_is_larger_than_seed_parse_tree?(parse_tree, previous_seed)
               if this_seed_grew
+                raise "this will never happen" unless parse_tree       # this is stupid, but we have to trick the compiler into knowing that parse_tree is guaranteed not to be nil here, because parse_tree_is_larger_than_seed_parse_tree? guarantees parse_tree isn't nil if we're in this branch
                 GlobalDebug.puts "seed grew: #{rule.name} at #{pos} : '#{parse_tree.try(&.simple_s_exp) || "nil"}'"
                 matcher.set_seed(rule, pos, parse_tree)
                 matcher.mark_parent_seed_growths_as_resulting_in_deeper_seed_growth(current_rule_application)
@@ -462,12 +463,8 @@ module Arborist
                   if seed_cannot_grow_any_more
                     current_rule_application.grew_seed_maximally!
                     GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos} (call #{current_rule_application.object_id}); consumed all input"
-                    full_grown_seed_to_return = parse_tree
-                    if full_grown_seed_to_return
-                      matcher.pos = full_grown_seed_to_return.finishing_pos + 1
-                    else
-                      matcher.pos = pos
-                    end
+                    full_grown_seed_to_return = parse_tree    # parse_tree guaranteed not to be nil
+                    matcher.pos = full_grown_seed_to_return.finishing_pos + 1
                     break
                   else
                     GlobalDebug.puts "continue to maximally grow seed for #{rule.name} at #{pos} (call #{current_rule_application.object_id}); pos = #{matcher.pos} ; input size = #{matcher.input.size}"
@@ -476,12 +473,8 @@ module Arborist
                 else
                   GlobalDebug.puts "finished seed growth for #{rule.name} at #{pos} (call #{current_rule_application.object_id}); should not grow maximally"
                   current_rule_application.not_safe_to_memoize!   # not safe to memoize if we are artificially limiting its growth
-                  full_grown_seed_to_return = parse_tree
-                  if full_grown_seed_to_return
-                    matcher.pos = full_grown_seed_to_return.finishing_pos + 1
-                  else
-                    matcher.pos = pos
-                  end
+                  full_grown_seed_to_return = parse_tree          # parse_tree guaranteed not to be nil
+                  matcher.pos = full_grown_seed_to_return.finishing_pos + 1
                   break
                 end
 
